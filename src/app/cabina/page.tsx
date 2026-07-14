@@ -1005,4 +1005,7 @@ function LegendItem({ color, label }: { color: string; label: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "var(--text-4)" }}>
       <div style={{ width: 6, height: 6, borderRadius: "50%", background: color }} />
-  
+      {label}
+    </div>
+  );
+}
