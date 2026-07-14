@@ -39,6 +39,10 @@ const FLAG: Record<string, string> = {
   MX: "🇲🇽", CO: "🇨🇴", PE: "🇵🇪", CL: "🇨🇱", AR: "🇦🇷",
 };
 
+const NOMBRE: Record<string, string> = {
+  MX: "México", CO: "Colombia", PE: "Perú", CL: "Chile", AR: "Argentina",
+};
+
 const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
 const AREAS = [
@@ -352,7 +356,7 @@ export default function Cabina() {
                           <td style={{ padding: "10px 12px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                               <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
-                              <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{pais}</span>
+                              <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
                             </div>
                           </td>
                           {loading ? (
@@ -430,7 +434,7 @@ export default function Cabina() {
                         <td style={{ padding: "10px 12px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
-                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{pais}</span>
+                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
                           </div>
                         </td>
                         {Array.from({ length: 7 }).map((_, j) => (
@@ -488,7 +492,7 @@ export default function Cabina() {
                         <td style={{ padding: "10px 12px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
-                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{pais}</span>
+                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
                           </div>
                         </td>
                         {Array.from({ length: 7 }).map((_, j) => (
@@ -546,7 +550,7 @@ export default function Cabina() {
                         <td style={{ padding: "10px 12px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
-                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{pais}</span>
+                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
                           </div>
                         </td>
                         {Array.from({ length: 7 }).map((_, j) => (
@@ -606,7 +610,7 @@ export default function Cabina() {
                         <td style={{ padding: "10px 12px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
-                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{pais}</span>
+                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
                           </div>
                         </td>
                         {Array.from({ length: 7 }).map((_, j) => (
@@ -848,7 +852,7 @@ export default function Cabina() {
                         <td style={{ padding: "10px 12px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
-                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{pais}</span>
+                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
                           </div>
                         </td>
                         {Array.from({ length: 6 }).map((_, j) => (
