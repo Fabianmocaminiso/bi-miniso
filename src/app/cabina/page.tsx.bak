@@ -1,0 +1,693 @@
+﻿"use client";
+import { useEffect, useState, useCallback } from "react";
+
+// ─── tipos ────────────────────────────────────────────────────────────────────
+
+type PaisData = {
+  num_tiendas: number;
+  facturacion_total: number;
+  costo_ventas: number | null;
+  utilidad_bruta: number | null;
+  margen_ub: number | null;
+  piezas: number;
+  ticket_promedio: number;
+  error?: string;
+};
+
+type CabinaData = Record<string, PaisData>;
+
+// ─── constantes ───────────────────────────────────────────────────────────────
+
+const PAISES = ["MX", "CO", "PE", "CL", "AR"] as const;
+
+const FLAG: Record<string, string> = {
+  MX: "🇲🇽", CO: "🇨🇴", PE: "🇵🇪", CL: "🇨🇱", AR: "🇦🇷",
+};
+
+const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+const AREAS = [
+  { id: "finanzas",    label: "Finanzas"    },
+  { id: "operaciones", label: "Operaciones" },
+  { id: "inventario",  label: "Inventario"  },
+  { id: "rrhh",        label: "RRHH"        },
+  { id: "logistica",   label: "Logística"   },
+];
+
+const NOW = new Date();
+
+// ─── formatters ───────────────────────────────────────────────────────────────
+
+function fmtMoney(n: number | null): string {
+  if (n == null) return "—";
+  if (n === 0) return "$0";
+  const abs = Math.abs(n);
+  const sign = n < 0 ? "-" : "";
+  if (abs >= 1_000_000_000) return sign + "$" + (abs / 1_000_000_000).toFixed(2) + "B";
+  if (abs >= 1_000_000)     return sign + "$" + (abs / 1_000_000).toFixed(2) + "M";
+  if (abs >= 1_000)         return sign + "$" + (abs / 1_000).toFixed(0) + "K";
+  return sign + "$" + abs.toFixed(0);
+}
+
+function fmtNum(n: number | null): string {
+  if (n == null) return "—";
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
+  if (n >= 1_000)     return (n / 1_000).toFixed(0) + "K";
+  return n.toString();
+}
+
+function fmtPct(n: number | null): string {
+  if (n == null) return "—";
+  return Number(n).toFixed(1) + "%";
+}
+
+// ─── ranking semáforo ─────────────────────────────────────────────────────────
+
+type Rank = "best" | "worst" | "mid" | "none";
+
+function getRanks(
+  data: CabinaData,
+  key: keyof PaisData,
+  higherIsBetter: boolean
+): Record<string, Rank> {
+  const vals = PAISES.map((p) => {
+    const row = data[p];
+    if (!row || row.error) return null;
+    const v = row[key];
+    return v != null ? { pais: p, val: Number(v) } : null;
+  }).filter(Boolean) as { pais: string; val: number }[];
+
+  if (vals.length < 2) return {};
+  const sorted = [...vals].sort((a, b) => b.val - a.val);
+  const result: Record<string, Rank> = {};
+  PAISES.forEach((p) => { result[p] = "mid"; });
+  result[higherIsBetter ? sorted[0].pais : sorted[sorted.length - 1].pais] = "best";
+  result[higherIsBetter ? sorted[sorted.length - 1].pais : sorted[0].pais] = "worst";
+  return result;
+}
+
+function Cell({ value, rank }: { value: string; rank: Rank }) {
+  if (value === "—") return <span style={{ color: "var(--text-4)" }}>—</span>;
+  const color =
+    rank === "best"  ? "var(--green)" :
+    rank === "worst" ? "var(--rose)"  : "var(--text-2)";
+  const arrow =
+    rank === "best"  ? <span style={{ color: "var(--green)", fontSize: 9, marginLeft: 2 }}>▲</span> :
+    rank === "worst" ? <span style={{ color: "var(--rose)",  fontSize: 9, marginLeft: 2 }}>▼</span> :
+    null;
+  return (
+    <span style={{ color, fontWeight: rank !== "mid" ? 500 : 400 }}>
+      {value}{arrow}
+    </span>
+  );
+}
+
+// ─── componente principal ─────────────────────────────────────────────────────
+
+export default function Cabina() {
+  const [year,  setYear]  = useState(NOW.getFullYear());
+  const [month, setMonth] = useState(NOW.getMonth() + 1);
+  const [data,  setData]  = useState<CabinaData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [area, setArea] = useState("finanzas");
+
+  const [pregunta, setPregunta]   = useState("");
+  const [respuesta, setRespuesta] = useState("");
+  const [iaLoading, setIaLoading] = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    fetch("/api/cabina?year=" + year + "&month=" + month)
+      .then((r) => r.json())
+      .then((d) => { if (d.ok) setData(d.data); else setError(d.error); })
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [year, month]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function preguntarIA() {
+    if (!pregunta.trim()) return;
+    setIaLoading(true);
+    setRespuesta("");
+    try {
+      const res = await fetch("/api/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pregunta, kpis: data, pais: "LATAM (" + MESES[month - 1] + " " + year + ")" }),
+      });
+      const d = await res.json();
+      setRespuesta(d.respuesta || d.error || "Sin respuesta");
+    } catch (e) {
+      setRespuesta(e instanceof Error ? e.message : "Error");
+    } finally {
+      setIaLoading(false);
+    }
+  }
+
+  const totales = data ? {
+    tiendas:     PAISES.reduce((s, p) => s + (data[p]?.num_tiendas || 0), 0),
+    facturacion: PAISES.reduce((s, p) => s + (data[p]?.facturacion_total || 0), 0),
+    ub:          PAISES.reduce((s, p) => s + (data[p]?.utilidad_bruta || 0), 0),
+    piezas:      PAISES.reduce((s, p) => s + (data[p]?.piezas || 0), 0),
+  } : null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--bg-0)", overflow: "hidden" }}>
+
+      {/* TOPBAR */}
+      <header style={{
+        background: "var(--bg-2)", borderBottom: "0.5px solid var(--border)",
+        padding: "0 20px", height: 52, display: "flex", alignItems: "center",
+        justifyContent: "space-between", flexShrink: 0, gap: 16,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{
+            background: "var(--red)", color: "#fff",
+            fontWeight: 600, fontSize: 12, letterSpacing: "0.12em",
+            padding: "4px 10px", borderRadius: 4,
+          }}>MINISO</div>
+          <span style={{ color: "var(--text-4)", fontSize: 12, letterSpacing: "0.04em" }}>
+            Cabina de Control
+          </span>
+        </div>
+        <nav style={{ display: "flex", gap: 4 }}>
+          {AREAS.map((a) => (
+            <button key={a.id} onClick={() => setArea(a.id)} style={{
+              padding: "5px 14px", borderRadius: 20, fontSize: 12, cursor: "pointer",
+              border: "0.5px solid transparent", transition: "all 0.15s",
+              background: area === a.id ? "var(--red)" : "transparent",
+              color: area === a.id ? "#fff" : "var(--text-3)",
+              fontWeight: area === a.id ? 500 : 400,
+            }}>
+              {a.label}
+            </button>
+          ))}
+        </nav>
+        <div style={{ width: 80 }} />
+      </header>
+
+      {/* BODY */}
+      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+
+        {/* SIDEBAR */}
+        <aside style={{
+          width: 148, background: "var(--bg-1)",
+          borderRight: "0.5px solid var(--border)",
+          padding: "16px 0", flexShrink: 0,
+          display: "flex", flexDirection: "column", gap: 0,
+        }}>
+          <SideSection label="Vistas" />
+          <SideItem icon="▦" label="Cabina" active />
+          <SideItem icon="↗" label="Tendencias" />
+          <SideItem icon="⊞" label="Tiendas" />
+          <SideSep />
+          <SideSection label="Período" />
+          <SidePicker
+            value={MESES[month - 1]}
+            options={MESES}
+            onChange={(v) => setMonth(MESES.indexOf(v) + 1)}
+          />
+          <SidePicker
+            value={String(year)}
+            options={["2024", "2025", "2026"]}
+            onChange={(v) => setYear(Number(v))}
+          />
+          <button onClick={load} disabled={loading} style={{
+            display: "block", margin: "4px 10px 0", width: "calc(100% - 20px)",
+            background: loading ? "var(--bg-4)" : "var(--red)",
+            border: "none", color: "#fff", fontSize: 11, fontWeight: 500,
+            padding: "5px 0", borderRadius: 5, cursor: loading ? "not-allowed" : "pointer",
+            transition: "background 0.15s",
+          }}>
+            {loading ? "..." : "Aplicar"}
+          </button>
+          <SideSep />
+          <SideSection label="Países" />
+          <SideItem icon="◉" label="LATAM" active />
+          <SideItem icon="⚑" label="México" />
+          <SideItem icon="⚑" label="Colombia" />
+          <SideItem icon="⚑" label="Perú" />
+          <SideItem icon="⚑" label="Chile" />
+          <SideItem icon="⚑" label="Argentina" />
+        </aside>
+
+        {/* MAIN */}
+        <main style={{ flex: 1, overflow: "auto", padding: 20 }}>
+
+          {/* FINANZAS */}
+          {area === "finanzas" && (
+            <>
+              {error && (
+                <div style={{
+                  background: "rgba(226,85,85,0.1)", border: "0.5px solid rgba(226,85,85,0.3)",
+                  borderRadius: 8, padding: "10px 14px", color: "var(--rose)", fontSize: 12, marginBottom: 16,
+                }}>
+                  Error al conectar con Redshift: {error}
+                </div>
+              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                <span style={{ fontSize: 16, fontWeight: 500 }}>{MESES[month - 1]} {year}</span>
+                <span style={{ color: "var(--text-4)" }}>·</span>
+                <span style={{ color: "var(--text-3)", fontSize: 12 }}>Vista comparativa — todos los países</span>
+                {loading && (
+                  <span style={{
+                    background: "var(--red-bg)", border: "0.5px solid var(--red-border)",
+                    color: "var(--red)", fontSize: 10, padding: "2px 8px", borderRadius: 10,
+                  }}>actualizando...</span>
+                )}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 16 }}>
+                <KpiCard label="Facturación LATAM"  value={totales ? fmtMoney(totales.facturacion) : "—"} loading={loading} />
+                <KpiCard label="Utilidad Bruta"     value={totales ? fmtMoney(totales.ub) : "—"}          loading={loading} />
+                <KpiCard label="Piezas vendidas"    value={totales ? fmtNum(totales.piezas) : "—"}         loading={loading} />
+                <KpiCard label="Tiendas activas"    value={totales ? String(totales.tiendas) : "—"} sub="5 países" loading={loading} />
+              </div>
+              <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
+                  <thead>
+                    <tr style={{ background: "var(--bg-2)" }}>
+                      <Th left width={72}>País</Th>
+                      <Th>Tiendas</Th>
+                      <Th>Facturación</Th>
+                      <Th>Costo VTA</Th>
+                      <Th>UB $</Th>
+                      <Th>Margen UB</Th>
+                      <Th>Piezas</Th>
+                      <Th>Ticket Prom.</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {PAISES.map((pais, i) => {
+                      const row = data?.[pais] as PaisData | undefined;
+                      const odd = i % 2 === 0;
+                      const rTiendas = data ? getRanks(data, "num_tiendas",      true)  : {};
+                      const rFact    = data ? getRanks(data, "facturacion_total", true)  : {};
+                      const rCosto   = data ? getRanks(data, "costo_ventas",      false) : {};
+                      const rUB      = data ? getRanks(data, "utilidad_bruta",    true)  : {};
+                      const rMargen  = data ? getRanks(data, "margen_ub",         true)  : {};
+                      const rPiezas  = data ? getRanks(data, "piezas",            true)  : {};
+                      const rTicket  = data ? getRanks(data, "ticket_promedio",   true)  : {};
+                      return (
+                        <tr key={pais} style={{ background: odd ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
+                          <td style={{ padding: "10px 12px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
+                              <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{pais}</span>
+                            </div>
+                          </td>
+                          {loading ? (
+                            Array.from({ length: 7 }).map((_, j) => (
+                              <td key={j} style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
+                            ))
+                          ) : row?.error ? (
+                            Array.from({ length: 7 }).map((_, j) => (
+                              <td key={j} style={{ padding: "10px 12px", textAlign: "right", color: "var(--rose)", fontSize: 10 }}>err</td>
+                            ))
+                          ) : (
+                            <>
+                              <Td><Cell value={fmtNum(row?.num_tiendas ?? null)}        rank={rTiendas[pais] || "none"} /></Td>
+                              <Td><Cell value={fmtMoney(row?.facturacion_total ?? null)} rank={rFact[pais]   || "none"} /></Td>
+                              <Td><Cell value={fmtMoney(row?.costo_ventas ?? null)}      rank={rCosto[pais]  || "none"} /></Td>
+                              <Td><Cell value={fmtMoney(row?.utilidad_bruta ?? null)}    rank={rUB[pais]     || "none"} /></Td>
+                              <Td><Cell value={fmtPct(row?.margen_ub ?? null)}           rank={rMargen[pais] || "none"} /></Td>
+                              <Td><Cell value={fmtNum(row?.piezas ?? null)}              rank={rPiezas[pais] || "none"} /></Td>
+                              <Td><Cell value={fmtMoney(row?.ticket_promedio ?? null)}   rank={rTicket[pais] || "none"} /></Td>
+                            </>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  {totales && !loading && (
+                    <tfoot>
+                      <tr style={{ background: "var(--bg-3)", borderTop: "0.5px solid var(--border-2)" }}>
+                        <td style={{ padding: "8px 12px", color: "var(--text-4)", fontSize: 10, letterSpacing: "0.08em" }}>LATAM</td>
+                        <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-1)", fontWeight: 500 }}>{fmtNum(totales.tiendas)}</td>
+                        <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-1)", fontWeight: 500 }}>{fmtMoney(totales.facturacion)}</td>
+                        <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
+                        <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-1)", fontWeight: 500 }}>{fmtMoney(totales.ub)}</td>
+                        <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
+                        <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-1)", fontWeight: 500 }}>{fmtNum(totales.piezas)}</td>
+                        <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+              <div style={{ display: "flex", gap: 16, marginTop: 8, paddingLeft: 2 }}>
+                <LegendItem color="var(--green)" label="Mejor del grupo" />
+                <LegendItem color="var(--rose)"  label="Peor del grupo" />
+                <span style={{ fontSize: 10, color: "var(--text-4)" }}>— Dato no disponible en esta tabla</span>
+              </div>
+            </>
+          )}
+
+          {/* RRHH */}
+          {area === "rrhh" && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                <span style={{ fontSize: 16, fontWeight: 500 }}>RRHH — Eficiencia HC</span>
+                <span style={{ color: "var(--text-4)" }}>·</span>
+                <span style={{ color: "var(--text-3)", fontSize: 12 }}>Headcount vs Ventas por tienda — México</span>
+                <span style={{
+                  background: "#1a1300", border: "0.5px solid #92400e",
+                  color: "#fbbf24", fontSize: 10, padding: "2px 8px", borderRadius: 10, marginLeft: 4,
+                }}>En desarrollo</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 20 }}>
+                <KpiCard label="Semana actual"     value="S23"     sub="Jul 2026"           loading={false} />
+                <KpiCard label="Alcance ventas"    value="97.3%"   sub="vs presupuesto"     loading={false} />
+                <KpiCard label="Tiendas exceso HC" value="27"      sub="-7 vs S21"          loading={false} />
+                <KpiCard label="Sobrecosto / sem"  value="$70,400" sub="~$2,200 / empleado" loading={false} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                <AreaPlaceholder
+                  icon="👥"
+                  title="KPIs de eficiencia (MX)"
+                  items={[
+                    { label: "Índice Eficiencia (60/40)", detail: "60% Vta/m2 + 40% Vta/Empleado",    status: "dev" },
+                    { label: "Venta / m2",                detail: "$1,930 promedio S23",               status: "dev" },
+                    { label: "Venta / Empleado",          detail: "$62,151 promedio S23",              status: "dev" },
+                    { label: "Semáforo tiendas",          detail: ">=1.00 OK · <0.85 alerta · <0.70 foco", status: "dev" },
+                    { label: "Diagnóstico causa raíz",    detail: "Venta / Sobrestaff / Espacio",      status: "dev" },
+                  ]}
+                />
+                <AreaPlaceholder
+                  icon="📋"
+                  title="Fuentes de datos pendientes"
+                  items={[
+                    { label: "HC vs Ventas semanal",        detail: "Reporte HC Tiendas SXX.xlsx — PLANTILLA VS. REAL", status: "pending" },
+                    { label: "Metadata tienda (m2, región)", detail: "P&L Tienda (México) YTD.xlsx — YTD Abril",        status: "pending" },
+                    { label: "Redshift — tabla HC",         detail: "Pendiente mapeo en miniso_dlh",                   status: "pending" },
+                    { label: "Países LATAM",                detail: "Hoy solo MX — CO/PE/CL/AR futuro",                status: "pending" },
+                  ]}
+                />
+              </div>
+              <div style={{
+                background: "var(--bg-3)", border: "0.5px solid var(--border)",
+                borderRadius: 8, padding: "14px 16px",
+                fontSize: 11, color: "var(--text-3)", lineHeight: 1.7,
+              }}>
+                <span style={{ color: "var(--text-1)", fontWeight: 500 }}>Historial reciente: </span>
+                S20 — 29 tiendas exceso, $96,800/sem · S21 — 34 tiendas exceso, 108.5% alcance, $85,800/sem · S23 — 27 tiendas exceso, 97.3% alcance, $70,400/sem
+              </div>
+            </>
+          )}
+
+          {/* OPERACIONES */}
+          {area === "operaciones" && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                <span style={{ fontSize: 16, fontWeight: 500 }}>Operaciones</span>
+                <span style={{ color: "var(--text-4)" }}>·</span>
+                <span style={{ color: "var(--text-3)", fontSize: 12 }}>Desempeño operativo por tienda y región</span>
+                <span style={{
+                  background: "#0a1a0a", border: "0.5px solid #1B4332",
+                  color: "#4ade80", fontSize: 10, padding: "2px 8px", borderRadius: 10, marginLeft: 4,
+                }}>Próximamente</span>
+              </div>
+              <AreaPlaceholder
+                icon="🏪"
+                title="KPIs operativos planificados"
+                items={[
+                  { label: "% Alcance vs presupuesto",   detail: "Por tienda y región",                         status: "pending" },
+                  { label: "Conversión",                 detail: "Transacciones / tráfico",                     status: "pending" },
+                  { label: "Cumplimiento de horarios",   detail: "Días con incidencia",                         status: "pending" },
+                  { label: "NPS / satisfacción cliente", detail: "Pendiente integración encuestas",             status: "pending" },
+                  { label: "Control presupuestario",     detail: "CEDIS, flete, nómina — shift a preventivo",  status: "pending" },
+                ]}
+              />
+            </>
+          )}
+
+          {/* INVENTARIO */}
+          {area === "inventario" && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                <span style={{ fontSize: 16, fontWeight: 500 }}>Inventario</span>
+                <span style={{ color: "var(--text-4)" }}>·</span>
+                <span style={{ color: "var(--text-3)", fontSize: 12 }}>Cobertura, rotación y SKUs activos por país</span>
+                <span style={{
+                  background: "#0a1a0a", border: "0.5px solid #1B4332",
+                  color: "#4ade80", fontSize: 10, padding: "2px 8px", borderRadius: 10, marginLeft: 4,
+                }}>Próximamente</span>
+              </div>
+              <AreaPlaceholder
+                icon="📦"
+                title="KPIs de inventario planificados"
+                items={[
+                  { label: "SKUs activos por país",    detail: "Catálogo vivo vs catálogo total",         status: "pending" },
+                  { label: "Cobertura de inventario",  detail: "Días de stock disponible",               status: "pending" },
+                  { label: "Rotación",                 detail: "COGS / inventario promedio",             status: "pending" },
+                  { label: "Fill rate",                detail: "% órdenes completadas a tiempo",         status: "pending" },
+                  { label: "Merma",                    detail: "Unidades perdidas / dañadas por tienda", status: "pending" },
+                ]}
+              />
+            </>
+          )}
+
+          {/* LOGÍSTICA */}
+          {area === "logistica" && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                <span style={{ fontSize: 16, fontWeight: 500 }}>Logística</span>
+                <span style={{ color: "var(--text-4)" }}>·</span>
+                <span style={{ color: "var(--text-3)", fontSize: 12 }}>CEDIS, flete y entregas por país</span>
+                <span style={{
+                  background: "#0a1a0a", border: "0.5px solid #1B4332",
+                  color: "#4ade80", fontSize: 10, padding: "2px 8px", borderRadius: 10, marginLeft: 4,
+                }}>Próximamente</span>
+              </div>
+              <AreaPlaceholder
+                icon="🚛"
+                title="KPIs logísticos planificados"
+                items={[
+                  { label: "On-time delivery",     detail: "% entregas en tiempo a tienda", status: "pending" },
+                  { label: "Costo flete / pieza",  detail: "Por país y corredor",           status: "pending" },
+                  { label: "Días de tránsito",     detail: "CEDIS → tienda promedio",       status: "pending" },
+                  { label: "Utilización CEDIS",    detail: "m3 ocupados / capacidad total", status: "pending" },
+                  { label: "Órdenes pendientes",   detail: "Backlog por país",              status: "pending" },
+                ]}
+              />
+            </>
+          )}
+
+        </main>
+      </div>
+
+      {/* BARRA CLAUDE */}
+      <div style={{
+        background: "var(--bg-2)", borderTop: "0.5px solid var(--border)",
+        padding: "10px 20px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
+      }}>
+        <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--red)", flexShrink: 0 }} />
+        <input
+          type="text"
+          value={pregunta}
+          onChange={(e) => setPregunta(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && preguntarIA()}
+          placeholder="Pregunta sobre los datos — ej. Por que AR tiene el margen mas bajo?"
+          style={{
+            flex: 1, background: "var(--bg-3)", border: "0.5px solid var(--border-2)",
+            borderRadius: 6, color: "var(--text-1)", fontSize: 12,
+            padding: "7px 12px", outline: "none",
+          }}
+        />
+        <button
+          onClick={preguntarIA}
+          disabled={iaLoading || !data}
+          style={{
+            background: iaLoading || !data ? "var(--bg-4)" : "var(--red)",
+            border: "none", color: "#fff", fontSize: 12, fontWeight: 500,
+            padding: "7px 16px", borderRadius: 6,
+            cursor: iaLoading || !data ? "not-allowed" : "pointer",
+            transition: "background 0.15s", flexShrink: 0,
+          }}
+        >
+          {iaLoading ? "..." : "Preguntar"}
+        </button>
+        {respuesta && (
+          <div style={{
+            position: "absolute", bottom: 56, left: 20, right: 20,
+            background: "var(--bg-3)", border: "0.5px solid var(--border-2)",
+            borderRadius: 8, padding: "12px 16px",
+            fontSize: 12, color: "var(--text-2)", lineHeight: 1.6,
+            whiteSpace: "pre-wrap", maxHeight: 160, overflowY: "auto",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ color: "var(--red)", fontSize: 10, fontWeight: 500 }}>CLAUDE</span>
+              <button
+                onClick={() => setRespuesta("")}
+                style={{ background: "none", border: "none", color: "var(--text-4)", cursor: "pointer", fontSize: 12 }}
+              >x</button>
+            </div>
+            {respuesta}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── sub-componentes ──────────────────────────────────────────────────────────
+
+function SideSep() {
+  return <div style={{ height: "0.5px", background: "var(--border)", margin: "6px 0" }} />;
+}
+
+function SidePicker({ value, options, onChange }: {
+  value: string; options: string[]; onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: "relative", margin: "2px 10px" }}>
+      <div onClick={() => setOpen(!open)} style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "5px 8px", background: "var(--bg-3)",
+        border: "0.5px solid var(--border-2)", borderRadius: 5,
+        fontSize: 11, color: "var(--text-2)", cursor: "pointer",
+      }}>
+        {value}
+        <span style={{ fontSize: 8, color: "var(--text-4)" }}>v</span>
+      </div>
+      {open && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
+          background: "var(--bg-3)", border: "0.5px solid var(--border-2)",
+          borderRadius: 5, marginTop: 2, overflow: "hidden",
+        }}>
+          {options.map((opt) => (
+            <div key={opt} onClick={() => { onChange(opt); setOpen(false); }} style={{
+              padding: "5px 8px", fontSize: 11, cursor: "pointer",
+              color: opt === value ? "var(--text-1)" : "var(--text-2)",
+              background: opt === value ? "var(--red-bg)" : "transparent",
+            }}>
+              {opt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SideSection({ label }: { label: string }) {
+  return (
+    <div style={{
+      padding: "12px 14px 4px", fontSize: 10, color: "var(--text-4)",
+      letterSpacing: "0.08em", textTransform: "uppercase",
+    }}>{label}</div>
+  );
+}
+
+function SideItem({ icon, label, active }: { icon: string; label: string; active?: boolean }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 8,
+      padding: "7px 14px", fontSize: 12, cursor: "pointer",
+      color: active ? "var(--text-1)" : "var(--text-3)",
+      background: active ? "var(--red-bg)" : "transparent",
+      borderLeft: "2px solid " + (active ? "var(--red)" : "transparent"),
+      transition: "all 0.1s",
+    }}>
+      <span style={{ fontSize: 13 }}>{icon}</span>
+      {label}
+    </div>
+  );
+}
+
+function KpiCard({ label, value, sub, loading }: {
+  label: string; value: string; sub?: string; loading?: boolean;
+}) {
+  return (
+    <div style={{
+      background: "var(--bg-3)", border: "0.5px solid var(--border)",
+      borderRadius: 8, padding: "10px 14px",
+    }}>
+      <div style={{ fontSize: 10, color: "var(--text-4)", letterSpacing: "0.06em", marginBottom: 4 }}>
+        {label.toUpperCase()}
+      </div>
+      <div style={{ fontSize: 20, fontWeight: 500, color: loading ? "var(--text-4)" : "var(--text-1)" }}>
+        {value}
+      </div>
+      {sub && <div style={{ fontSize: 10, color: "var(--text-4)", marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function Th({ children, left, width }: { children: React.ReactNode; left?: boolean; width?: number }) {
+  return (
+    <th style={{
+      padding: "9px 12px", textAlign: left ? "left" : "right",
+      color: "var(--text-4)", fontSize: 10, letterSpacing: "0.07em",
+      fontWeight: 500, textTransform: "uppercase",
+      borderBottom: "0.5px solid var(--border)",
+      whiteSpace: "nowrap", width: width || "auto",
+    }}>{children}</th>
+  );
+}
+
+function Td({ children }: { children: React.ReactNode }) {
+  return (
+    <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+      {children}
+    </td>
+  );
+}
+
+function LegendItem({ color, label }: { color: string; label: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "var(--text-4)" }}>
+      <div style={{ width: 6, height: 6, borderRadius: "50%", background: color }} />
+      {label}
+    </div>
+  );
+}
+
+type ItemStatus = "dev" | "pending";
+
+function AreaPlaceholder({ icon, title, items }: {
+  icon: string;
+  title: string;
+  items: { label: string; detail: string; status: ItemStatus }[];
+}) {
+  return (
+    <div style={{
+      background: "var(--bg-3)", border: "0.5px solid var(--border)",
+      borderRadius: 8, padding: "16px 18px",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+        <span style={{ fontSize: 18 }}>{icon}</span>
+        <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)" }}>{title}</span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {items.map((item, i) => (
+          <div key={i} style={{
+            display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+            gap: 12, padding: "8px 10px",
+            background: "var(--bg-2)", borderRadius: 6,
+            border: "0.5px solid var(--border)",
+          }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-2)", marginBottom: 2 }}>
+                {item.label}
+              </div>
+              <div style={{ fontSize: 10, color: "var(--text-4)" }}>{item.detail}</div>
+            </div>
+            <span style={{
+              fontSize: 9, padding: "2px 7px", borderRadius: 8, flexShrink: 0, marginTop: 1,
+              background: item.status === "dev" ? "#2e1f0a" : "#0a0a1a",
+              color:      item.status === "dev" ? "#fbbf24" : "#444",
+              border:     "0.5px solid " + (item.status === "dev" ? "#92400e" : "#1e1e2e"),
+            }}>
+              {item.status === "dev" ? "dev" : "pendiente"}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
