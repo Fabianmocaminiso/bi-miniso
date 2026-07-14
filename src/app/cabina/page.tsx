@@ -16,6 +16,21 @@ type PaisData = {
 
 type CabinaData = Record<string, PaisData>;
 
+type MarketingData = {
+  registros:     { nuevos_mes: number; total_base: number };
+  transacciones: { clientes_activos: number; venta_loyalty: number; transacciones: number; piezas: number };
+  puntos: {
+    ganados_pos: number; monto_pos: number; clientes_pos: number;
+    ganados_ecom: number; monto_ecom: number;
+    ganados_app: number; monto_app: number;
+    ganados_total: number;
+    redimidos_pos: number; monto_red_pos: number; clientes_redim: number;
+    redimidos_app: number; monto_red_app: number;
+    redimidos_gift: number; monto_red_gift: number;
+    redimidos_total: number; monto_redimidos_total: number;
+  };
+};
+
 // ─── constantes ───────────────────────────────────────────────────────────────
 
 const PAISES = ["MX", "CO", "PE", "CL", "AR"] as const;
@@ -136,6 +151,11 @@ export default function Cabina() {
   const [error, setError] = useState<string | null>(null);
   const [area, setArea] = useState("finanzas");
 
+  // Marketing — loyalty MinisoLove
+  const [mktData,    setMktData]    = useState<MarketingData | null>(null);
+  const [mktLoading, setMktLoading] = useState(false);
+  const [mktError,   setMktError]   = useState<string | null>(null);
+
   // Claude
   const [pregunta, setPregunta]   = useState("");
   const [respuesta, setRespuesta] = useState("");
@@ -152,6 +172,20 @@ export default function Cabina() {
   }, [year, month]);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadMarketing = useCallback(() => {
+    setMktLoading(true);
+    setMktError(null);
+    fetch(`/api/marketing?year=${year}&month=${month}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.ok) setMktData(d.data); else setMktError(d.error); })
+      .catch((e) => setMktError(e.message))
+      .finally(() => setMktLoading(false));
+  }, [year, month]);
+
+  useEffect(() => {
+    if (area === "marketing") loadMarketing();
+  }, [area, loadMarketing]);
 
   async function preguntarIA() {
     if (!pregunta.trim()) return;
@@ -667,55 +701,118 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "marketing" && (
             <>
-              <AreaHeader title={periodo} sub="Tráfico, loyalty MinisoLove y canales digitales" badge={<BadgePending />} />
+              <AreaHeader title={periodo} sub="MinisoLove · Loyalty MX — datos en tiempo real desde Redshift" loading={mktLoading} />
+
+              {/* KPI Cards — datos reales MX */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 16 }}>
-                <KpiCard label="Visitas tiendas"          value="—" sub="KPI-MKT-001" pending />
-                <KpiCard label="Registros MinisoLove"     value="—" sub="KPI-MKT-005" pending />
-                <KpiCard label="Venta MinisoLove"         value="—" sub="KPI-MKT-015" pending />
-                <KpiCard label="% Participación venta"    value="—" sub="KPI-MKT-016" pending />
+                <KpiCard
+                  label="Registros nuevos"
+                  value={mktData ? fmtNum(mktData.registros.nuevos_mes) : "—"}
+                  sub={mktData ? `Base total: ${fmtNum(mktData.registros.total_base)}` : "KPI-MKT-005"}
+                  loading={mktLoading}
+                  kpiId="KPI-MKT-005"
+                />
+                <KpiCard
+                  label="Venta MinisoLove"
+                  value={mktData ? fmtMoney(mktData.transacciones.venta_loyalty) : "—"}
+                  sub={mktData ? `${fmtNum(mktData.transacciones.transacciones)} tickets loyalty` : "KPI-MKT-015"}
+                  loading={mktLoading}
+                  kpiId="KPI-MKT-015"
+                />
+                <KpiCard
+                  label="% Part. venta MX"
+                  value={
+                    mktData && data?.MX?.facturacion_total
+                      ? fmtPct(mktData.transacciones.venta_loyalty / (data.MX.facturacion_total || 1) * 100)
+                      : "—"
+                  }
+                  sub="Loyalty / Facturación MX"
+                  loading={mktLoading}
+                  kpiId="KPI-MKT-016"
+                />
+                <KpiCard
+                  label="Monto pts redimidos"
+                  value={mktData ? fmtMoney(mktData.puntos.monto_redimidos_total) : "—"}
+                  sub={mktData ? `${fmtNum(mktData.puntos.redimidos_total)} corazones` : "KPI-MKT-009"}
+                  loading={mktLoading}
+                  kpiId="KPI-MKT-009"
+                />
               </div>
-              <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
+
+              {/* Tabla canales — puntos ganados y redimidos */}
+              {mktError && (
+                <div style={{ padding: "10px 14px", background: "var(--bg-3)", border: "0.5px solid var(--rose)", borderRadius: 8, fontSize: 11, color: "var(--rose)", marginBottom: 12 }}>
+                  Error cargando loyalty: {mktError}
+                </div>
+              )}
+
+              <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 12 }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
                   <thead>
                     <tr style={{ background: "var(--bg-2)" }}>
-                      <Th left width={72}>País</Th>
-                      <ThKpi id="KPI-MKT-001">Visitas Tiendas</ThKpi>
-                      <ThKpi id="KPI-MKT-004">% Crecim. Tráfico</ThKpi>
-                      <ThKpi id="KPI-MKT-005">Registros Loyalty</ThKpi>
-                      <ThKpi id="KPI-MKT-013">Tickets MinisoLove</ThKpi>
-                      <ThKpi id="KPI-MKT-015">Venta MinisoLove</ThKpi>
-                      <ThKpi id="KPI-MKT-016">% Part. Venta</ThKpi>
-                      <ThKpi id="KPI-MKT-009">Monto Pts Redimidos</ThKpi>
+                      <Th left width={130}>Canal</Th>
+                      <ThKpi id="KPI-MKT-006">Pts Ganados</ThKpi>
+                      <ThKpi id="KPI-MKT-006">Monto Ganado</ThKpi>
+                      <ThKpi id="KPI-MKT-007">Pts Redimidos</ThKpi>
+                      <ThKpi id="KPI-MKT-009">Monto Redimido</ThKpi>
                     </tr>
                   </thead>
                   <tbody>
-                    {PAISES.map((pais, i) => (
-                      <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
-                        <td style={{ padding: "10px 12px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
-                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{pais}</span>
-                          </div>
-                        </td>
-                        {Array.from({ length: 7 }).map((_, j) => (
-                          <td key={j} style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                        ))}
+                    {[
+                      {
+                        canal: "🏪 POS (Tiendas)",
+                        ganados: mktData?.puntos.ganados_pos ?? null,
+                        monto_g: mktData?.puntos.monto_pos ?? null,
+                        redimidos: mktData?.puntos.redimidos_pos ?? null,
+                        monto_r: mktData?.puntos.monto_red_pos ?? null,
+                      },
+                      {
+                        canal: "🛒 E-commerce",
+                        ganados: mktData?.puntos.ganados_ecom ?? null,
+                        monto_g: mktData?.puntos.monto_ecom ?? null,
+                        redimidos: mktData?.puntos.redimidos_gift ?? null,
+                        monto_r: mktData?.puntos.monto_red_gift ?? null,
+                      },
+                      {
+                        canal: "📱 App Miniso",
+                        ganados: mktData?.puntos.ganados_app ?? null,
+                        monto_g: mktData?.puntos.monto_app ?? null,
+                        redimidos: mktData?.puntos.redimidos_app ?? null,
+                        monto_r: mktData?.puntos.monto_red_app ?? null,
+                      },
+                    ].map((row, i) => (
+                      <tr key={row.canal} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
+                        <td style={{ padding: "10px 12px", color: "var(--text-1)", fontWeight: 500 }}>{row.canal}</td>
+                        <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-2)" }}>{fmtNum(row.ganados)}</td>
+                        <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-2)" }}>{fmtMoney(row.monto_g)}</td>
+                        <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-2)" }}>{fmtNum(row.redimidos)}</td>
+                        <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--rose)" }}>{fmtMoney(row.monto_r)}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr style={{ background: "var(--bg-3)", borderTop: "0.5px solid var(--border-2)" }}>
-                      <td style={{ padding: "8px 12px", color: "var(--text-4)", fontSize: 10, letterSpacing: "0.08em" }}>LATAM</td>
-                      {Array.from({ length: 7 }).map((_, j) => (
-                        <td key={j} style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                      ))}
+                      <td style={{ padding: "8px 12px", color: "var(--text-4)", fontSize: 10, letterSpacing: "0.08em", fontWeight: 600 }}>TOTAL MX</td>
+                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-1)", fontWeight: 600 }}>{fmtNum(mktData?.puntos.ganados_total ?? null)}</td>
+                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
+                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-1)", fontWeight: 600 }}>{fmtNum(mktData?.puntos.redimidos_total ?? null)}</td>
+                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--rose)", fontWeight: 600 }}>{fmtMoney(mktData?.puntos.monto_redimidos_total ?? null)}</td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
-              <TableLegend />
-              <div style={{ marginTop: 12, padding: "10px 14px", background: "var(--bg-3)", border: "0.5px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-4)" }}>
-                KPIs adicionales: KPI-MKT-002/003 Sensores (Getin) · KPI-MKT-006/007/008 Pts redimidos POS/E-COMM/APP · KPI-MKT-010 Venta Total Marketing · KPI-MKT-011 % Redención · KPI-MKT-012 Frec. compra top loyalty · KPI-MKT-014 % Part. tickets
+
+              {/* Clientes activos loyalty */}
+              {mktData && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 12 }}>
+                  <KpiCard label="Clientes activos loyalty" value={fmtNum(mktData.transacciones.clientes_activos)} sub="Con compra en el período" kpiId="KPI-MKT-013" />
+                  <KpiCard label="Piezas en tickets loyalty" value={fmtNum(mktData.transacciones.piezas)} sub="Solo transacciones loyalty" kpiId="KPI-MKT-015" />
+                  <KpiCard label="Clientes que redimieron" value={fmtNum(mktData.puntos.clientes_redim)} sub="POS — descuento" kpiId="KPI-MKT-011" />
+                </div>
+              )}
+
+              <div style={{ marginTop: 4, padding: "10px 14px", background: "var(--bg-3)", border: "0.5px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-4)" }}>
+                Datos solo MX · KPI-MKT-001/002/003 Tráfico/Sensores pendiente integración Getin · CO/PE/CL/AR sin loyalty Redshift
               </div>
             </>
           )}
