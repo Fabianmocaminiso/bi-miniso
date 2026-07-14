@@ -47,7 +47,7 @@ export async function GET(request: Request) {
       // 3. Transacciones loyalty (solo ventas, no devoluciones)
       query(`
         SELECT
-          COUNT(DISTINCT customer_id)          AS clientes_activos,
+          COUNT(DISTINCT idcrm)               AS clientes_activos,
           COALESCE(SUM(ventasinimpuesto), 0)   AS venta_loyalty,
           COUNT(*)                              AS transacciones,
           COALESCE(SUM(piezas), 0)             AS piezas
