@@ -1,55 +1,88 @@
 // /api/schema-probe/route.ts
-// Diagnóstico de schema Redshift — solo lectura, uso interno
-// Visitar: GET /api/schema-probe
+// Diagnostico ampliado de schema Redshift
 import { NextResponse } from "next/server";
 import { query } from "@/lib/redshift";
 
 export async function GET() {
-  try {
-    // 1. Tablas en analytics_mx_prod que puedan tener inventario/ventas
-    const tables = await query(`
-      SELECT table_name, table_type
-      FROM information_schema.tables
-      WHERE table_schema = 'analytics_mx_prod'
-      ORDER BY table_name
-    `);
+  const results: Record<string, any> = { ok: true };
 
-    // 2. Columnas de loy_ganados_pos (para fix Marketing)
-    const loyColumns = await query(`
-      SELECT column_name, data_type
-      FROM information_schema.columns
-      WHERE table_schema = 'analytics_mx_prod'
-        AND table_name = 'loy_ganados_pos'
-      ORDER BY ordinal_position
-    `);
+  const run = async (key: string, sql: string) => {
+    try {
+      results[key] = await query(sql);
+    } catch (e: any) {
+      results[key + "_error"] = e.message;
+    }
+  };
 
-    // 3. Columnas de loy_redimidos_descuento_pos
-    const loyRedColumns = await query(`
-      SELECT column_name, data_type
-      FROM information_schema.columns
-      WHERE table_schema = 'analytics_mx_prod'
-        AND table_name = 'loy_redimidos_descuento_pos'
-      ORDER BY ordinal_position
-    `);
+  // Contexto de conexion
+  await run("ctx", `
+    SELECT current_database() AS db, current_schema() AS schema
+  `);
 
-    // 4. Buscar tablas con "inventar" o "stock" en el nombre
-    const invTables = tables.filter((t: any) =>
-      t.table_name.toLowerCase().includes("inventar") ||
-      t.table_name.toLowerCase().includes("stock") ||
-      t.table_name.toLowerCase().includes("mv_") ||
-      t.table_name.toLowerCase().includes("comercial")
-    );
+  // Todos los schemas disponibles
+  await run("schemas", `
+    SELECT nspname AS schema_name
+    FROM pg_namespace
+    WHERE nspname NOT LIKE 'pg_%' AND nspname != 'information_schema'
+    ORDER BY nspname
+    LIMIT 50
+  `);
 
-    return NextResponse.json({
-      ok: true,
-      all_tables_count: tables.length,
-      all_tables: tables.map((t: any) => t.table_name),
-      inventory_and_mv_tables: invTables,
-      loy_ganados_pos_columns: loyColumns,
-      loy_redimidos_pos_columns: loyRedColumns,
-    }, { status: 200 });
+  // Tablas en analytics_mx_prod via information_schema
+  await run("tables_info_schema", `
+    SELECT table_name, table_type
+    FROM information_schema.tables
+    WHERE table_schema = 'analytics_mx_prod'
+    ORDER BY table_name
+  `);
 
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
-  }
+  // Tablas via pg_tables (todas los schemas)
+  await run("tables_pg", `
+    SELECT schemaname, tablename
+    FROM pg_tables
+    WHERE schemaname NOT IN ('pg_catalog','information_schema')
+    ORDER BY schemaname, tablename
+    LIMIT 200
+  `);
+
+  // SVV_ALL_TABLES (Redshift — incluye tablas de data sharing)
+  await run("tables_svv", `
+    SELECT database_name, schema_name, table_name, table_type
+    FROM SVV_ALL_TABLES
+    WHERE schema_name NOT IN ('pg_catalog','information_schema')
+    ORDER BY schema_name, table_name
+    LIMIT 300
+  `);
+
+  // Columnas de loy_ganados_pos (schema analytics_mx_prod)
+  await run("loy_ganados_cols", `
+    SELECT column_name, data_type
+    FROM information_schema.columns
+    WHERE table_schema = 'analytics_mx_prod'
+      AND table_name = 'loy_ganados_pos'
+    ORDER BY ordinal_position
+  `);
+
+  // Columnas via SVV_ALL_COLUMNS (Redshift)
+  await run("loy_ganados_svv", `
+    SELECT schema_name, table_name, column_name, data_type
+    FROM SVV_ALL_COLUMNS
+    WHERE table_name = 'loy_ganados_pos'
+    LIMIT 50
+  `);
+
+  // Buscar tablas con nombres relacionados a inventario/comercial
+  await run("inv_search", `
+    SELECT schemaname, tablename
+    FROM pg_tables
+    WHERE tablename ILIKE '%inventar%'
+       OR tablename ILIKE '%stock%'
+       OR tablename ILIKE '%mv_%'
+       OR tablename ILIKE '%comercial%'
+       OR tablename ILIKE '%loy%'
+    ORDER BY schemaname, tablename
+    LIMIT 50
+  `);
+
+  return NextResponse.json(results, { status: 200 });
 }
