@@ -23,9 +23,24 @@ import { query } from "@/lib/redshift";
 
 // ── Query 1: Fill Rate (tb_operaciones_radiografia_dimsucursal) ───────────────
 // Campos verificados: sku3 (INTEGER 0/1), idealsku (INTEGER), fecha (DATE)
+// IMPORTANTE: usar snapshot del último día del período.
+// idealsku es una CONSTANTE por tienda (≈22k SKUs de catálogo).
+// Si se suma sobre N días, el denominador se multiplica ×N y el ratio se distorsiona.
+// La misma lógica se aplica al inventario CEDIS (buildCedisStockQuery).
 function buildFillRateQuery(year: number, month: number) {
   return {
     sql: `
+      WITH ultima_fecha AS (
+        SELECT MAX(fecha) AS fmax
+        FROM miniso_dlh.analytics_mx_prod.tb_operaciones_radiografia_dimsucursal
+        WHERE EXTRACT(YEAR  FROM fecha)::INTEGER = $1
+          AND EXTRACT(MONTH FROM fecha)::INTEGER = $2
+      ),
+      snapshot AS (
+        SELECT r.*
+        FROM miniso_dlh.analytics_mx_prod.tb_operaciones_radiografia_dimsucursal r
+        JOIN ultima_fecha u ON r.fecha = u.fmax
+      )
       SELECT
         SUM(sku3)                                                             AS skus_surtidos,
         SUM(idealsku)                                                         AS skus_ideal,
@@ -35,10 +50,12 @@ function buildFillRateQuery(year: number, month: number) {
         AVG(CASE WHEN idealsku > 0
           THEN 100.0 * sku3::DECIMAL / idealsku END)                           AS fill_rate_avg_tienda,
         COUNT(DISTINCT CASE WHEN sku3 = 1 THEN idsucursal END)                AS tiendas_ok_fill,
-        COUNT(DISTINCT idsucursal)                                            AS total_tiendas
-      FROM miniso_dlh.analytics_mx_prod.tb_operaciones_radiografia_dimsucursal
-      WHERE EXTRACT(YEAR  FROM fecha)::INTEGER = $1
-        AND EXTRACT(MONTH FROM fecha)::INTEGER = $2
+        COUNT(DISTINCT idsucursal)                                            AS total_tiendas,
+        (SELECT fmax FROM ultima_fecha)                                        AS fecha_snapshot,
+        (SELECT COUNT(DISTINCT fecha) FROM miniso_dlh.analytics_mx_prod.tb_operaciones_radiografia_dimsucursal
+           WHERE EXTRACT(YEAR FROM fecha)::INTEGER = $1
+             AND EXTRACT(MONTH FROM fecha)::INTEGER = $2)                     AS dias_con_datos
+      FROM snapshot
     `,
     params: [year, month],
   };
@@ -132,6 +149,8 @@ export async function GET(request: Request) {
       skus_ideal:           Number(fill.skus_ideal)      || null,
       tiendas_ok_fill:      Number(fill.tiendas_ok_fill) || null,
       total_tiendas:        Number(fill.total_tiendas)   || null,
+      fill_fecha_snapshot:  fill.fecha_snapshot           ?? null,
+      fill_dias_con_datos:  Number(fill.dias_con_datos)  || null,
       // KPI-LOG-001
       cedis_lf_pzas:        Number(cedis.cedis_lf_pzas)  || null,
       cedis_tr_pzas:        Number(cedis.cedis_tr_pzas)  || null,
