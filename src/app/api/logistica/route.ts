@@ -5,7 +5,7 @@ import { query } from "@/lib/redshift";
 // Datos disponibles SOLO para MX (tablas inventario confirmadas Diccionario v5.2)
 //
 // KPI-LOG-003 Fill Rate Surtimiento
-//   Fuente: miniso_dlh.analytics_mx_prod.mv_operaciones_radiografia_dimsucursal
+//   Fuente: miniso_dlh.analytics_mx_prod.tb_operaciones_radiografia_dimsucursal
 //   Fórmula: SUM(sku3) / SUM(idealsku) × 100
 //   sku3     = binario: 1 si inventario_tienda > 3 unidades (SKU bien surtido)
 //   idealsku = SKUs ideales que debe tener la tienda (modelo de surtido HQ)
@@ -21,7 +21,7 @@ import { query } from "@/lib/redshift";
 // Fuente: Diccionario_Datos_Tecnico_v5.2 — tablas y columnas verificadas
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Query 1: Fill Rate (mv_operaciones_radiografia_dimsucursal) ───────────────
+// ── Query 1: Fill Rate (tb_operaciones_radiografia_dimsucursal) ───────────────
 // Campos verificados: sku3 (INTEGER 0/1), idealsku (INTEGER), fecha (DATE)
 function buildFillRateQuery(year: number, month: number) {
   return {
@@ -36,7 +36,7 @@ function buildFillRateQuery(year: number, month: number) {
           THEN 100.0 * sku3::DECIMAL / idealsku END)                           AS fill_rate_avg_tienda,
         COUNT(DISTINCT CASE WHEN sku3 = 1 THEN idsucursal END)                AS tiendas_ok_fill,
         COUNT(DISTINCT idsucursal)                                            AS total_tiendas
-      FROM miniso_dlh.analytics_mx_prod.mv_operaciones_radiografia_dimsucursal
+      FROM miniso_dlh.analytics_mx_prod.tb_operaciones_radiografia_dimsucursal
       WHERE EXTRACT(YEAR  FROM fecha)::INTEGER = $1
         AND EXTRACT(MONTH FROM fecha)::INTEGER = $2
     `,
