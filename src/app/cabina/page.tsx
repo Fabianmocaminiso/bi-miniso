@@ -93,6 +93,10 @@ const NOMBRE: Record<string, string> = {
   MX: "México", CO: "Colombia", PE: "Perú", CL: "Chile", AR: "Argentina",
 };
 
+const MONEDA: Record<string, string> = {
+  MX: "MXN", CO: "COP", PE: "PEN", CL: "CLP", AR: "ARS",
+};
+
 const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
 const AREAS = [
@@ -462,8 +466,8 @@ export default function Cabina() {
                         <tr key={pais} style={{ background: odd ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
                           <td style={{ padding: "10px 12px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
-                              <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
+                              <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{pais}</span>
+                              <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span><span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 4 }}>{MONEDA[pais]}</span>
                             </div>
                           </td>
                           {loading ? (
@@ -516,7 +520,7 @@ export default function Cabina() {
             <>
               <AreaHeader title={periodo} sub="Desempeño operativo por país — datos reales Redshift" loading={opsLoading} />
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 16 }}>
-                <KpiCard label="Cumplimiento ppto"   value="—" sub="KPI-OPS-001" pending />
+                <KpiCard label="Vta Prom/Tienda" value={opsData ? fmtMoney(opsData.latam.vta_prom_tienda) : "—"} sub="LATAM · KPI-OPS-005" loading={opsLoading} kpiId="KPI-OPS-005" />
                 <KpiCard
                   label="Ticket promedio"
                   value={opsData ? fmtMoney(opsData.latam.ticket_promedio) : "—"}
@@ -553,7 +557,6 @@ export default function Cabina() {
                   <thead>
                     <tr style={{ background: "var(--bg-2)" }}>
                       <Th left width={72}>País</Th>
-                      <ThKpi id="KPI-OPS-001">Cumpl. Ppto</ThKpi>
                       <ThKpi id="KPI-OPS-002">Ticket Prom.</ThKpi>
                       <ThKpi id="KPI-OPS-003">Pzas/Ticket</ThKpi>
                       <ThKpi id="KPI-OPS-004">Conversión</ThKpi>
@@ -569,17 +572,16 @@ export default function Cabina() {
                         <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
                           <td style={{ padding: "10px 12px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
-                              <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
+                              <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{pais}</span>
+                              <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span><span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 4 }}>{MONEDA[pais]}</span>
                             </div>
                           </td>
-                          <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
                           <Td>{r?.ticket_promedio ? fmtMoney(r.ticket_promedio) : "—"}</Td>
                           <Td>{r?.pzas_ticket ? r.pzas_ticket.toFixed(1) : "—"}</Td>
                           <Td>
                             {pais === "MX" && r?.conversion_pct != null
                               ? fmtPct(r.conversion_pct)
-                              : <span style={{ color: "var(--text-4)", fontSize: 10 }}>sin sensor</span>
+                              : —
                             }
                           </Td>
                           <Td>{r?.vta_prom_tienda ? fmtMoney(r.vta_prom_tienda) : "—"}</Td>
@@ -595,7 +597,6 @@ export default function Cabina() {
                   <tfoot>
                     <tr style={{ background: "var(--bg-3)", borderTop: "0.5px solid var(--border-2)" }}>
                       <td style={{ padding: "8px 12px", color: "var(--text-4)", fontSize: 10, letterSpacing: "0.08em" }}>LATAM</td>
-                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
                       <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-2)", fontWeight: 500 }}>
                         {opsData ? fmtMoney(opsData.latam.ticket_promedio) : "—"}
                       </td>
@@ -614,7 +615,7 @@ export default function Cabina() {
               </div>
               <TableLegend />
               <div style={{ marginTop: 12, padding: "10px 14px", background: "var(--bg-3)", border: "0.5px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-4)" }}>
-                Pendiente Redshift: KPI-OPS-001 Cumpl. Ppto · KPI-OPS-006 Clientes (CO/PE/CL/AR) · KPI-OPS-017 OTD Almacén (Manhattan) · KPI-OPS-007 SKUs sin exhibir · KPI-OPS-012 % Tiendas con bono
+                Pendiente Redshift: KPI-OPS-006 Clientes (CO/PE/CL/AR) · KPI-OPS-017 OTD Almacén (Manhattan) · KPI-OPS-007 SKUs sin exhibir · KPI-OPS-012 % Tiendas con bono
               </div>
             </>
           )}
@@ -686,8 +687,8 @@ export default function Cabina() {
                         <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
                           <td style={{ padding: "10px 12px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
-                              <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
+                              <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{pais}</span>
+                              <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span><span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 4 }}>{MONEDA[pais]}</span>
                             </div>
                           </td>
                           <Td>{isMX && mx?.sell_thru != null ? fmtPct(mx.sell_thru) : "—"}</Td>
@@ -749,8 +750,8 @@ export default function Cabina() {
                       <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
                         <td style={{ padding: "10px 12px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
-                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
+                            <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{pais}</span>
+                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span><span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 4 }}>{MONEDA[pais]}</span>
                           </div>
                         </td>
                         {Array.from({ length: 7 }).map((_, j) => (
@@ -833,8 +834,8 @@ export default function Cabina() {
                         <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
                           <td style={{ padding: "10px 12px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
-                              <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
+                              <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{pais}</span>
+                              <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span><span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 4 }}>{MONEDA[pais]}</span>
                             </div>
                           </td>
                           <Td>{isMX && mx?.cedis_total_pzas != null ? fmtNum(mx.cedis_total_pzas) : "—"}</Td>
@@ -903,7 +904,7 @@ export default function Cabina() {
                           <tr key={pais} style={{ background: odd ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
                             <td style={{ padding: "10px 12px" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
+                                <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{pais}</span>
                                 <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{pais}</span>
                               </div>
                             </td>
@@ -1085,8 +1086,8 @@ export default function Cabina() {
                       <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
                         <td style={{ padding: "10px 12px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
-                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
+                            <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{pais}</span>
+                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span><span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 4 }}>{MONEDA[pais]}</span>
                           </div>
                         </td>
                         {Array.from({ length: 6 }).map((_, j) => (
