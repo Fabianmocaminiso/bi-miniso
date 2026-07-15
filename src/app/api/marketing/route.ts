@@ -8,9 +8,9 @@ import { query } from "@/lib/redshift";
 // loy_redimidos_descuento_pos/appminiso/xgiftcard_ecommerce → redimidos
 //
 // Columnas (Diccionario_Datos_Tecnico_v5.2):
-//   loy_clientes_registrados  : idcrm, fechacreacion, puntosdisponiblesactuales
+//   loy_clientes_registrados  : id_crm, fechacreacion, puntosdisponiblesactuales
 //   loy_customers_transactions: ventasinimpuesto, piezas, transaction_date, tipotransaccion, customer_id
-//   loy_ganados_* / loy_redimidos_*: fecha, idcrm, puntosposteados, montopuntos
+//   loy_ganados_* / loy_redimidos_*: fecha, id_crm, puntos_posteados, monto_puntos
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
 
       // 1. Registros nuevos del mes
       query(`
-        SELECT COUNT(DISTINCT idcrm) AS nuevos_mes
+        SELECT COUNT(DISTINCT id_crm) AS nuevos_mes
         FROM miniso_dlh.analytics_mx_prod.loy_clientes_registrados
         WHERE EXTRACT(YEAR  FROM fechacreacion)::INTEGER = $1
           AND EXTRACT(MONTH FROM fechacreacion)::INTEGER = $2
@@ -40,14 +40,14 @@ export async function GET(request: Request) {
 
       // 2. Base total acumulada
       query(`
-        SELECT COUNT(DISTINCT idcrm) AS total_base
+        SELECT COUNT(DISTINCT id_crm) AS total_base
         FROM miniso_dlh.analytics_mx_prod.loy_clientes_registrados
       `, []),
 
       // 3. Transacciones loyalty (solo ventas, no devoluciones)
       query(`
         SELECT
-          COUNT(DISTINCT idcrm)               AS clientes_activos,
+          COUNT(DISTINCT id_crm)               AS clientes_activos,
           COALESCE(SUM(ventasinimpuesto), 0)   AS venta_loyalty,
           COUNT(*)                              AS transacciones,
           COALESCE(SUM(piezas), 0)             AS piezas
@@ -60,9 +60,9 @@ export async function GET(request: Request) {
       // 4. Puntos ganados POS
       query(`
         SELECT
-          COALESCE(SUM(puntosposteados), 0) AS puntos,
-          COALESCE(SUM(montopuntos), 0)      AS monto,
-          COUNT(DISTINCT idcrm)              AS clientes
+          COALESCE(SUM(puntos_posteados), 0) AS puntos,
+          COALESCE(SUM(monto_puntos), 0)      AS monto,
+          COUNT(DISTINCT id_crm)              AS clientes
         FROM miniso_dlh.analytics_mx_prod.loy_ganados_pos
         WHERE EXTRACT(YEAR  FROM fecha)::INTEGER = $1
           AND EXTRACT(MONTH FROM fecha)::INTEGER = $2
@@ -71,8 +71,8 @@ export async function GET(request: Request) {
       // 5. Puntos ganados E-commerce
       query(`
         SELECT
-          COALESCE(SUM(puntosposteados), 0) AS puntos,
-          COALESCE(SUM(montopuntos), 0)      AS monto
+          COALESCE(SUM(puntos_posteados), 0) AS puntos,
+          COALESCE(SUM(monto_puntos), 0)      AS monto
         FROM miniso_dlh.analytics_mx_prod.loy_ganados_ecommerce
         WHERE EXTRACT(YEAR  FROM fecha)::INTEGER = $1
           AND EXTRACT(MONTH FROM fecha)::INTEGER = $2
@@ -81,8 +81,8 @@ export async function GET(request: Request) {
       // 6. Puntos ganados App Miniso
       query(`
         SELECT
-          COALESCE(SUM(puntosposteados), 0) AS puntos,
-          COALESCE(SUM(montopuntos), 0)      AS monto
+          COALESCE(SUM(puntos_posteados), 0) AS puntos,
+          COALESCE(SUM(monto_puntos), 0)      AS monto
         FROM miniso_dlh.analytics_mx_prod.loy_ganados_appminiso
         WHERE EXTRACT(YEAR  FROM fecha)::INTEGER = $1
           AND EXTRACT(MONTH FROM fecha)::INTEGER = $2
@@ -91,9 +91,9 @@ export async function GET(request: Request) {
       // 7. Redimidos descuento POS
       query(`
         SELECT
-          ABS(COALESCE(SUM(puntosposteados), 0)) AS puntos,
-          ABS(COALESCE(SUM(montopuntos), 0))      AS monto,
-          COUNT(DISTINCT idcrm)                   AS clientes
+          ABS(COALESCE(SUM(puntos_posteados), 0)) AS puntos,
+          ABS(COALESCE(SUM(monto_puntos), 0))      AS monto,
+          COUNT(DISTINCT id_crm)                   AS clientes
         FROM miniso_dlh.analytics_mx_prod.loy_redimidos_descuento_pos
         WHERE EXTRACT(YEAR  FROM fecha)::INTEGER = $1
           AND EXTRACT(MONTH FROM fecha)::INTEGER = $2
@@ -102,8 +102,8 @@ export async function GET(request: Request) {
       // 8. Redimidos App
       query(`
         SELECT
-          ABS(COALESCE(SUM(puntosposteados), 0)) AS puntos,
-          ABS(COALESCE(SUM(montopuntos), 0))      AS monto
+          ABS(COALESCE(SUM(puntos_posteados), 0)) AS puntos,
+          ABS(COALESCE(SUM(monto_puntos), 0))      AS monto
         FROM miniso_dlh.analytics_mx_prod.loy_redimidos_appminiso
         WHERE EXTRACT(YEAR  FROM fecha)::INTEGER = $1
           AND EXTRACT(MONTH FROM fecha)::INTEGER = $2
@@ -112,8 +112,8 @@ export async function GET(request: Request) {
       // 9. Redimidos GiftCard E-commerce
       query(`
         SELECT
-          ABS(COALESCE(SUM(puntosposteados), 0)) AS puntos,
-          ABS(COALESCE(SUM(montopuntos), 0))      AS monto
+          ABS(COALESCE(SUM(puntos_posteados), 0)) AS puntos,
+          ABS(COALESCE(SUM(monto_puntos), 0))      AS monto
         FROM miniso_dlh.analytics_mx_prod.loy_redimidos_xgiftcard_ecommerce
         WHERE EXTRACT(YEAR  FROM fecha)::INTEGER = $1
           AND EXTRACT(MONTH FROM fecha)::INTEGER = $2

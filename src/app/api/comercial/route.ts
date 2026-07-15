@@ -3,7 +3,7 @@ import { query } from "@/lib/redshift";
 
 // ─── /api/comercial ────────────────────────────────────────────────────────────
 // Datos disponibles SOLO para MX (tablas inventario confirmadas Diccionario v5.2)
-// Tabla: miniso_dlh.analytics_mx_prod.mv_h_ventas_inventario_dimsuc_dimprod
+// Tabla: miniso_dlh.analytics_mx_prod.tb_h_ventas_inventario_dimsuc_dimprod
 //
 // Columnas clave (verificadas en Diccionario_Datos_Tecnico_v5.2):
 //   idsucursal, idproducto, fecha, piezas, ventasiniva, ventatotal,
@@ -18,7 +18,7 @@ import { query } from "@/lib/redshift";
 // KPI-COM-001 Precio Prom           = SUM(ventasiniva) / SUM(piezas)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MV = `miniso_dlh.analytics_mx_prod.mv_h_ventas_inventario_dimsuc_dimprod`;
+const MV = `miniso_dlh.analytics_mx_prod.tb_h_ventas_inventario_dimsuc_dimprod`;
 
 // Filtros estándar (excluir CEDIS, ARIO y PREMIOS)
 const FILTER_TIENDAS = `

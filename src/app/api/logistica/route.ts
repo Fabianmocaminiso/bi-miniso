@@ -11,7 +11,7 @@ import { query } from "@/lib/redshift";
 //   idealsku = SKUs ideales que debe tener la tienda (modelo de surtido HQ)
 //
 // KPI-LOG-001 Inventario CEDIS disponible (pzas)
-//   Fuente: miniso_dlh.analytics_mx_prod.mv_h_ventas_inventario_dimsuc_dimprod
+//   Fuente: miniso_dlh.analytics_mx_prod.tb_h_ventas_inventario_dimsuc_dimprod
 //   Campos: centrolf (CEDIS LF disponible) · centrotr (CEDIS TR) · centroou (CEDIS OU)
 //   Snapshot al último día del período
 //
@@ -44,7 +44,7 @@ function buildFillRateQuery(year: number, month: number) {
   };
 }
 
-// ── Query 2: Inventario CEDIS (mv_h_ventas_inventario_dimsuc_dimprod) ─────────
+// ── Query 2: Inventario CEDIS (tb_h_ventas_inventario_dimsuc_dimprod) ─────────
 // centrolf = CEDIS LF disponible (neto comprometidos)
 // centrotr = CEDIS TR stock
 // centroou = CEDIS OU stock
@@ -54,7 +54,7 @@ function buildCedisStockQuery(year: number, month: number) {
     sql: `
       WITH ultima_fecha AS (
         SELECT MAX(fecha) AS fmax
-        FROM miniso_dlh.analytics_mx_prod.mv_h_ventas_inventario_dimsuc_dimprod
+        FROM miniso_dlh.analytics_mx_prod.tb_h_ventas_inventario_dimsuc_dimprod
         WHERE year::INTEGER = $1
           AND month         = $2
       )
@@ -64,7 +64,7 @@ function buildCedisStockQuery(year: number, month: number) {
         SUM(f.centroou)                                                       AS cedis_ou_pzas,
         SUM(COALESCE(f.centrolf, 0) + COALESCE(f.centrotr, 0) + COALESCE(f.centroou, 0))
                                                                               AS cedis_total_pzas
-      FROM miniso_dlh.analytics_mx_prod.mv_h_ventas_inventario_dimsuc_dimprod f
+      FROM miniso_dlh.analytics_mx_prod.tb_h_ventas_inventario_dimsuc_dimprod f
       JOIN ultima_fecha u ON f.fecha = u.fmax
       WHERE f.year::INTEGER = $1
         AND f.month         = $2
@@ -83,7 +83,7 @@ function buildVentasMesQuery(year: number, month: number) {
       SELECT
         SUM(piezas)                                                           AS piezas_mes,
         COUNT(DISTINCT fecha)                                                 AS dias_con_venta
-      FROM miniso_dlh.analytics_mx_prod.mv_h_ventas_inventario_dimsuc_dimprod
+      FROM miniso_dlh.analytics_mx_prod.tb_h_ventas_inventario_dimsuc_dimprod
       WHERE year::INTEGER = $1
         AND month         = $2
         AND idsucursal NOT LIKE 'CEN%'
