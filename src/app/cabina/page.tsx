@@ -31,6 +31,56 @@ type MarketingData = {
   };
 };
 
+type OperacionesRow = {
+  num_tiendas: number;
+  num_tickets: number;
+  piezas: number;
+  venta: number;
+  ticket_promedio: number;
+  pzas_ticket: number;
+  vta_prom_tienda: number;
+  conversion_pct: number | null;
+  trafico_total: number | null;
+  error?: string;
+};
+
+type OperacionesData = {
+  data: Record<string, OperacionesRow>;
+  latam: { ticket_promedio: number; pzas_ticket: number; vta_prom_tienda: number };
+};
+
+type ComercialData = {
+  MX: {
+    sell_thru: number | null;
+    skus_tiendas: number | null;
+    skus_almacen: number | null;
+    stock_tienda_pzas: number | null;
+    stock_tienda_valor: number | null;
+    precio_promedio: number | null;
+    piezas_mes: number;
+    stock_total_pzas: number;
+    cedis_stock_pzas: number | null;
+    num_tiendas: number;
+  };
+};
+
+type LogisticaData = {
+  MX: {
+    fill_rate_pct: number | null;
+    skus_surtidos: number | null;
+    skus_ideal: number | null;
+    tiendas_ok_fill: number | null;
+    total_tiendas: number | null;
+    cedis_lf_pzas: number | null;
+    cedis_tr_pzas: number | null;
+    cedis_ou_pzas: number | null;
+    cedis_total_pzas: number | null;
+    cedis_meses: number | null;
+    piezas_mes: number;
+    venta_diaria: number;
+  };
+};
+
 // ─── constantes ───────────────────────────────────────────────────────────────
 
 const PAISES = ["MX", "CO", "PE", "CL", "AR"] as const;
@@ -160,6 +210,21 @@ export default function Cabina() {
   const [mktLoading, setMktLoading] = useState(false);
   const [mktError,   setMktError]   = useState<string | null>(null);
 
+  // Operaciones
+  const [opsData,    setOpsData]    = useState<OperacionesData | null>(null);
+  const [opsLoading, setOpsLoading] = useState(false);
+  const [opsError,   setOpsError]   = useState<string | null>(null);
+
+  // Comercial
+  const [comData,    setComData]    = useState<ComercialData | null>(null);
+  const [comLoading, setComLoading] = useState(false);
+  const [comError,   setComError]   = useState<string | null>(null);
+
+  // Logística
+  const [logData,    setLogData]    = useState<LogisticaData | null>(null);
+  const [logLoading, setLogLoading] = useState(false);
+  const [logError,   setLogError]   = useState<string | null>(null);
+
   // Claude
   const [pregunta, setPregunta]   = useState("");
   const [respuesta, setRespuesta] = useState("");
@@ -190,6 +255,48 @@ export default function Cabina() {
   useEffect(() => {
     if (area === "marketing") loadMarketing();
   }, [area, loadMarketing]);
+
+  const loadOperaciones = useCallback(() => {
+    setOpsLoading(true);
+    setOpsError(null);
+    fetch(`/api/operaciones?year=${year}&month=${month}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.ok) setOpsData(d); else setOpsError(d.error); })
+      .catch((e) => setOpsError(e.message))
+      .finally(() => setOpsLoading(false));
+  }, [year, month]);
+
+  useEffect(() => {
+    if (area === "operaciones") loadOperaciones();
+  }, [area, loadOperaciones]);
+
+  const loadComercial = useCallback(() => {
+    setComLoading(true);
+    setComError(null);
+    fetch(`/api/comercial?year=${year}&month=${month}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.ok) setComData(d); else setComError(d.error); })
+      .catch((e) => setComError(e.message))
+      .finally(() => setComLoading(false));
+  }, [year, month]);
+
+  useEffect(() => {
+    if (area === "comercial") loadComercial();
+  }, [area, loadComercial]);
+
+  const loadLogistica = useCallback(() => {
+    setLogLoading(true);
+    setLogError(null);
+    fetch(`/api/logistica?year=${year}&month=${month}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.ok) setLogData(d); else setLogError(d.error); })
+      .catch((e) => setLogError(e.message))
+      .finally(() => setLogLoading(false));
+  }, [year, month]);
+
+  useEffect(() => {
+    if (area === "logistica") loadLogistica();
+  }, [area, loadLogistica]);
 
   async function preguntarIA() {
     if (!pregunta.trim()) return;
@@ -407,13 +514,40 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "operaciones" && (
             <>
-              <AreaHeader title={periodo} sub="Desempeño operativo por país" badge={<BadgePending />} />
+              <AreaHeader title={periodo} sub="Desempeño operativo por país — datos reales Redshift" loading={opsLoading} />
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 16 }}>
-                <KpiCard label="Cumplimiento ppto"     value="—" sub="KPI-OPS-001" pending />
-                <KpiCard label="Ticket promedio"       value="—" sub="KPI-OPS-002" pending />
-                <KpiCard label="Pzas por ticket"       value="—" sub="KPI-OPS-003" pending />
-                <KpiCard label="Conversión"            value="—" sub="KPI-OPS-004" pending />
+                <KpiCard label="Cumplimiento ppto"   value="—" sub="KPI-OPS-001" pending />
+                <KpiCard
+                  label="Ticket promedio"
+                  value={opsData ? fmtMoney(opsData.latam.ticket_promedio) : "—"}
+                  sub="LATAM ponderado · KPI-OPS-002"
+                  loading={opsLoading}
+                  kpiId="KPI-OPS-002"
+                />
+                <KpiCard
+                  label="Pzas por ticket"
+                  value={opsData ? opsData.latam.pzas_ticket.toFixed(1) : "—"}
+                  sub="LATAM ponderado · KPI-OPS-003"
+                  loading={opsLoading}
+                  kpiId="KPI-OPS-003"
+                />
+                <KpiCard
+                  label="Conversión MX"
+                  value={opsData?.data?.MX?.conversion_pct != null
+                    ? fmtPct(opsData.data.MX.conversion_pct)
+                    : "—"}
+                  sub={opsData?.data?.MX?.trafico_total != null
+                    ? `Tráfico: ${fmtNum(opsData.data.MX.trafico_total)} personas`
+                    : "Solo MX · KPI-OPS-004"}
+                  loading={opsLoading}
+                  kpiId="KPI-OPS-004"
+                />
               </div>
+              {opsError && (
+                <div style={{ padding: "8px 12px", background: "var(--bg-3)", borderRadius: 6, color: "var(--rose)", fontSize: 11, marginBottom: 12 }}>
+                  Error cargando operaciones: {opsError}
+                </div>
+              )}
               <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
                   <thead>
@@ -429,33 +563,58 @@ export default function Cabina() {
                     </tr>
                   </thead>
                   <tbody>
-                    {PAISES.map((pais, i) => (
-                      <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
-                        <td style={{ padding: "10px 12px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
-                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
-                          </div>
-                        </td>
-                        {Array.from({ length: 7 }).map((_, j) => (
-                          <td key={j} style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                        ))}
-                      </tr>
-                    ))}
+                    {PAISES.map((pais, i) => {
+                      const r = opsData?.data?.[pais];
+                      return (
+                        <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
+                          <td style={{ padding: "10px 12px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
+                              <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
+                          <Td>{r?.ticket_promedio ? fmtMoney(r.ticket_promedio) : "—"}</Td>
+                          <Td>{r?.pzas_ticket ? r.pzas_ticket.toFixed(1) : "—"}</Td>
+                          <Td>
+                            {pais === "MX" && r?.conversion_pct != null
+                              ? fmtPct(r.conversion_pct)
+                              : <span style={{ color: "var(--text-4)", fontSize: 10 }}>sin sensor</span>
+                            }
+                          </Td>
+                          <Td>{r?.vta_prom_tienda ? fmtMoney(r.vta_prom_tienda) : "—"}</Td>
+                          <Td>{pais === "MX" && mktData
+                            ? fmtNum(mktData.transacciones.clientes_activos)
+                            : <span style={{ color: "var(--text-4)", fontSize: 10 }}>—</span>
+                          }</Td>
+                          <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <tfoot>
                     <tr style={{ background: "var(--bg-3)", borderTop: "0.5px solid var(--border-2)" }}>
                       <td style={{ padding: "8px 12px", color: "var(--text-4)", fontSize: 10, letterSpacing: "0.08em" }}>LATAM</td>
-                      {Array.from({ length: 7 }).map((_, j) => (
-                        <td key={j} style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                      ))}
+                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
+                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-2)", fontWeight: 500 }}>
+                        {opsData ? fmtMoney(opsData.latam.ticket_promedio) : "—"}
+                      </td>
+                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-2)", fontWeight: 500 }}>
+                        {opsData ? opsData.latam.pzas_ticket.toFixed(1) : "—"}
+                      </td>
+                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
+                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-2)", fontWeight: 500 }}>
+                        {opsData ? fmtMoney(opsData.latam.vta_prom_tienda) : "—"}
+                      </td>
+                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
+                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
               <TableLegend />
               <div style={{ marginTop: 12, padding: "10px 14px", background: "var(--bg-3)", border: "0.5px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-4)" }}>
-                KPIs pendientes de conexión Redshift: KPI-OPS-007 SKUs sin exhibir · KPI-OPS-008 36 hrs · KPI-OPS-010 Calificación trade · KPI-OPS-012 % Tiendas con bono · KPI-OPS-015 % Faltante inv · KPI-OPS-019 Checklist
+                Pendiente Redshift: KPI-OPS-001 Cumpl. Ppto · KPI-OPS-006 Clientes (CO/PE/CL/AR) · KPI-OPS-017 OTD Almacén (Manhattan) · KPI-OPS-007 SKUs sin exhibir · KPI-OPS-012 % Tiendas con bono
               </div>
             </>
           )}
@@ -465,13 +624,46 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "comercial" && (
             <>
-              <AreaHeader title={periodo} sub="Stock, sell-through y SKUs activos por país — KPI-COM" badge={<BadgePending />} />
+              <AreaHeader title={periodo} sub="Stock, sell-through y SKUs activos — MX datos reales" loading={comLoading} />
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 16 }}>
-                <KpiCard label="Sell Thru General"     value="—" sub="KPI-COM-005" pending />
-                <KpiCard label="SKUs Prom en Tiendas"  value="—" sub="KPI-COM-008" pending />
-                <KpiCard label="SKUs Prom en Almacén"  value="—" sub="KPI-COM-009" pending />
-                <KpiCard label="Stock Prom/Tienda $"   value="—" sub="KPI-COM-013" pending />
+                <KpiCard
+                  label="Sell Thru MX"
+                  value={comData?.MX?.sell_thru != null ? fmtPct(comData.MX.sell_thru) : "—"}
+                  sub={comData?.MX?.piezas_mes
+                    ? `${fmtNum(comData.MX.piezas_mes)} pzas vendidas`
+                    : "KPI-COM-005"}
+                  loading={comLoading}
+                  kpiId="KPI-COM-005"
+                />
+                <KpiCard
+                  label="SKUs Prom/Tienda"
+                  value={comData?.MX?.skus_tiendas != null ? fmtNum(comData.MX.skus_tiendas) : "—"}
+                  sub="MX — tiendas activas · KPI-COM-008"
+                  loading={comLoading}
+                  kpiId="KPI-COM-008"
+                />
+                <KpiCard
+                  label="SKUs en CEDIS"
+                  value={comData?.MX?.skus_almacen != null ? fmtNum(comData.MX.skus_almacen) : "—"}
+                  sub="MX — almacén activo · KPI-COM-009"
+                  loading={comLoading}
+                  kpiId="KPI-COM-009"
+                />
+                <KpiCard
+                  label="Stock Prom/Tienda $"
+                  value={comData?.MX?.stock_tienda_valor != null ? fmtMoney(comData.MX.stock_tienda_valor) : "—"}
+                  sub={comData?.MX?.stock_tienda_pzas != null
+                    ? `${fmtNum(comData.MX.stock_tienda_pzas)} pzas/tienda`
+                    : "MX · KPI-COM-013"}
+                  loading={comLoading}
+                  kpiId="KPI-COM-013"
+                />
               </div>
+              {comError && (
+                <div style={{ padding: "8px 12px", background: "var(--bg-3)", borderRadius: 6, color: "var(--rose)", fontSize: 11, marginBottom: 12 }}>
+                  Error cargando comercial: {comError}
+                </div>
+              )}
               <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
                   <thead>
@@ -487,33 +679,41 @@ export default function Cabina() {
                     </tr>
                   </thead>
                   <tbody>
-                    {PAISES.map((pais, i) => (
-                      <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
-                        <td style={{ padding: "10px 12px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
-                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
-                          </div>
-                        </td>
-                        {Array.from({ length: 7 }).map((_, j) => (
-                          <td key={j} style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                        ))}
-                      </tr>
-                    ))}
+                    {PAISES.map((pais, i) => {
+                      const isMX = pais === "MX";
+                      const mx   = comData?.MX;
+                      return (
+                        <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
+                          <td style={{ padding: "10px 12px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
+                              <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
+                            </div>
+                          </td>
+                          <Td>{isMX && mx?.sell_thru != null ? fmtPct(mx.sell_thru) : "—"}</Td>
+                          <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
+                          <Td>{isMX && mx?.skus_tiendas != null ? fmtNum(mx.skus_tiendas) : "—"}</Td>
+                          <Td>{isMX && mx?.skus_almacen != null ? fmtNum(mx.skus_almacen) : "—"}</Td>
+                          <Td>{isMX && mx?.stock_tienda_pzas != null ? fmtNum(mx.stock_tienda_pzas) : "—"}</Td>
+                          <Td>{isMX && mx?.stock_tienda_valor != null ? fmtMoney(mx.stock_tienda_valor) : "—"}</Td>
+                          <Td>{isMX && mx?.precio_promedio != null ? fmtMoney(mx.precio_promedio) : "—"}</Td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <tfoot>
                     <tr style={{ background: "var(--bg-3)", borderTop: "0.5px solid var(--border-2)" }}>
                       <td style={{ padding: "8px 12px", color: "var(--text-4)", fontSize: 10, letterSpacing: "0.08em" }}>LATAM</td>
-                      {Array.from({ length: 7 }).map((_, j) => (
-                        <td key={j} style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                      ))}
+                      <td colSpan={7} style={{ padding: "8px 12px", color: "var(--text-4)", fontSize: 10 }}>
+                        Inventario LATAM (CO/PE/CL/AR): pendiente tablas h_ventas_inventario por país
+                      </td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
               <TableLegend />
               <div style={{ marginTop: 12, padding: "10px 14px", background: "var(--bg-3)", border: "0.5px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-4)" }}>
-                KPIs adicionales pendientes: KPI-COM-010 SKUs &lt;3 pzas CEDIS · KPI-COM-011 SKUs &lt;3 pzas Tiendas · KPI-COM-002/003/004 Rebajas % descuentos · KPI-COM-007 % Vta producción nacional
+                Pendiente Redshift: CO/PE/CL/AR h_ventas_inventario por país · KPI-COM-006 Sell Thru AA · KPI-COM-010/011 SKUs &lt;3 pzas · KPI-COM-002/003/004 Descuentos
               </div>
             </>
           )}
@@ -581,15 +781,36 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "logistica" && (
             <>
-              <AreaHeader title={periodo} sub="Inventario, surtimiento y distribución por país" badge={<BadgePending />} />
+              <AreaHeader title={periodo} sub="Inventario, surtimiento y distribución — MX datos reales" loading={logLoading} />
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 16 }}>
-                <KpiCard label="Total inventario (meses)" value="—" sub="KPI-LOG-019" pending />
-                <KpiCard label="Fill rate surtimiento"    value="—" sub="KPI-LOG-003" pending />
-                <KpiCard label="OTP15"                    value="—" sub="KPI-LOG-004" pending />
-                <KpiCard label="% Gto dist / venta"       value="—" sub="KPI-LOG-002" pending />
+                <KpiCard
+                  label="Inv CEDIS MX (pzas)"
+                  value={logData?.MX?.cedis_total_pzas != null ? fmtNum(logData.MX.cedis_total_pzas) : "—"}
+                  sub={logData?.MX?.cedis_meses != null
+                    ? `${logData.MX.cedis_meses} meses cobertura`
+                    : "KPI-LOG-001"}
+                  loading={logLoading}
+                  kpiId="KPI-LOG-001"
+                />
+                <KpiCard
+                  label="Fill Rate MX"
+                  value={logData?.MX?.fill_rate_pct != null ? fmtPct(logData.MX.fill_rate_pct) : "—"}
+                  sub={logData?.MX?.skus_surtidos != null
+                    ? `${fmtNum(logData.MX.skus_surtidos)} / ${fmtNum(logData.MX.skus_ideal ?? 0)} SKUs`
+                    : "KPI-LOG-003"}
+                  loading={logLoading}
+                  kpiId="KPI-LOG-003"
+                />
+                <KpiCard label="OTP15"              value="—" sub="KPI-LOG-004" pending />
+                <KpiCard label="% Gto dist / venta" value="—" sub="KPI-LOG-002" pending />
               </div>
+              {logError && (
+                <div style={{ padding: "8px 12px", background: "var(--bg-3)", borderRadius: 6, color: "var(--rose)", fontSize: 11, marginBottom: 12 }}>
+                  Error cargando logística: {logError}
+                </div>
+              )}
 
-              {/* Tabla dinámica — pendiente Redshift */}
+              {/* Tabla inventario y fill rate por país */}
               <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 16 }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
                   <thead>
@@ -605,26 +826,39 @@ export default function Cabina() {
                     </tr>
                   </thead>
                   <tbody>
-                    {PAISES.map((pais, i) => (
-                      <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
-                        <td style={{ padding: "10px 12px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
-                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
-                          </div>
-                        </td>
-                        {Array.from({ length: 7 }).map((_, j) => (
-                          <td key={j} style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                        ))}
-                      </tr>
-                    ))}
+                    {PAISES.map((pais, i) => {
+                      const isMX = pais === "MX";
+                      const mx   = logData?.MX;
+                      return (
+                        <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
+                          <td style={{ padding: "10px 12px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <span style={{ fontSize: 16 }}>{FLAG[pais]}</span>
+                              <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
+                            </div>
+                          </td>
+                          <Td>{isMX && mx?.cedis_total_pzas != null ? fmtNum(mx.cedis_total_pzas) : "—"}</Td>
+                          <Td>{isMX && mx?.fill_rate_pct != null
+                            ? <span style={{ color: Number(mx.fill_rate_pct) >= 85 ? "var(--green)" : Number(mx.fill_rate_pct) >= 70 ? "var(--amber)" : "var(--rose)" }}>
+                                {fmtPct(mx.fill_rate_pct)}
+                              </span>
+                            : "—"}
+                          </Td>
+                          <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
+                          <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
+                          <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
+                          <Td>{isMX && mx?.cedis_meses != null ? `${mx.cedis_meses} sem` : "—"}</Td>
+                          <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <tfoot>
                     <tr style={{ background: "var(--bg-3)", borderTop: "0.5px solid var(--border-2)" }}>
                       <td style={{ padding: "8px 12px", color: "var(--text-4)", fontSize: 10, letterSpacing: "0.08em" }}>LATAM</td>
-                      {Array.from({ length: 7 }).map((_, j) => (
-                        <td key={j} style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                      ))}
+                      <td colSpan={7} style={{ padding: "8px 12px", color: "var(--text-4)", fontSize: 10 }}>
+                        Inventario CO/PE/CL/AR: pendiente tablas h_ventas_inventario por país en Redshift
+                      </td>
                     </tr>
                   </tfoot>
                 </table>
