@@ -581,7 +581,7 @@ export default function Cabina() {
                           <Td>
                             {pais === "MX" && r?.conversion_pct != null
                               ? fmtPct(r.conversion_pct)
-                              : —
+                              : "—"
                             }
                           </Td>
                           <Td>{r?.vta_prom_tienda ? fmtMoney(r.vta_prom_tienda) : "—"}</Td>
