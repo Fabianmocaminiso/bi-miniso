@@ -36,7 +36,7 @@ function buildFillRateQuery(year: number, month: number) {
         WHERE EXTRACT(YEAR  FROM fecha)::INTEGER = $1
           AND EXTRACT(MONTH FROM fecha)::INTEGER = $2
       ),
-      snapshot AS (
+      fill_snap AS (
         SELECT r.*
         FROM miniso_dlh.analytics_mx_prod.tb_operaciones_radiografia_dimsucursal r
         JOIN ultima_fecha u ON r.fecha = u.fmax
@@ -55,7 +55,7 @@ function buildFillRateQuery(year: number, month: number) {
         (SELECT COUNT(DISTINCT fecha) FROM miniso_dlh.analytics_mx_prod.tb_operaciones_radiografia_dimsucursal
            WHERE EXTRACT(YEAR FROM fecha)::INTEGER = $1
              AND EXTRACT(MONTH FROM fecha)::INTEGER = $2)                     AS dias_con_datos
-      FROM snapshot
+      FROM fill_snap
     `,
     params: [year, month],
   };
