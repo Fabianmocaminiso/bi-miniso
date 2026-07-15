@@ -40,8 +40,8 @@ function buildSalesQuery(year: number, month: number) {
           THEN ROUND(SUM(ventasiniva)::DECIMAL / SUM(piezas), 2)
           ELSE 0 END                                                       AS precio_promedio
       FROM ${MV}
-      WHERE year::INTEGER = $1
-        AND month         = $2
+      WHERE anio = $1
+        AND EXTRACT(MONTH FROM fecha)::INTEGER = $2
         ${FILTER_TIENDAS}
         AND piezas > 0
     `,
@@ -58,8 +58,8 @@ function buildStockSnapshotQuery(year: number, month: number) {
       WITH ultima_fecha AS (
         SELECT MAX(fecha) AS fmax
         FROM ${MV}
-        WHERE year::INTEGER = $1
-          AND month         = $2
+        WHERE anio = $1
+          AND EXTRACT(MONTH FROM fecha)::INTEGER = $2
           ${FILTER_TIENDAS}
       )
       SELECT
@@ -74,8 +74,8 @@ function buildStockSnapshotQuery(year: number, month: number) {
           ELSE 0 END                                                       AS stock_tienda_valor
       FROM ${MV} f
       JOIN ultima_fecha u ON f.fecha = u.fmax
-      WHERE f.year::INTEGER = $1
-        AND f.month         = $2
+      WHERE f.anio = $1
+        AND EXTRACT(MONTH FROM f.fecha)::INTEGER = $2
         ${FILTER_TIENDAS}
     `,
     params: [year, month],
@@ -90,8 +90,8 @@ function buildCedisQuery(year: number, month: number) {
       WITH ultima_fecha AS (
         SELECT MAX(fecha) AS fmax
         FROM ${MV}
-        WHERE year::INTEGER = $1
-          AND month         = $2
+        WHERE anio = $1
+          AND EXTRACT(MONTH FROM fecha)::INTEGER = $2
           AND idsucursal LIKE 'CEN%'
       )
       SELECT
@@ -99,8 +99,8 @@ function buildCedisQuery(year: number, month: number) {
         SUM(f.stock)                                                      AS cedis_stock_pzas
       FROM ${MV} f
       JOIN ultima_fecha u ON f.fecha = u.fmax
-      WHERE f.year::INTEGER = $1
-        AND f.month         = $2
+      WHERE f.anio = $1
+        AND EXTRACT(MONTH FROM f.fecha)::INTEGER = $2
         AND f.idsucursal LIKE 'CEN%'
     `,
     params: [year, month],

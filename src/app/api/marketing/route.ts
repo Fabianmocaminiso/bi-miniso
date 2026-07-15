@@ -34,8 +34,8 @@ export async function GET(request: Request) {
       query(`
         SELECT COUNT(DISTINCT id_crm) AS nuevos_mes
         FROM miniso_dlh.analytics_mx_prod.loy_clientes_registrados
-        WHERE EXTRACT(YEAR  FROM fechacreacion)::INTEGER = $1
-          AND EXTRACT(MONTH FROM fechacreacion)::INTEGER = $2
+        WHERE EXTRACT(YEAR  FROM fecha_creacion)::INTEGER = $1
+          AND EXTRACT(MONTH FROM fecha_creacion)::INTEGER = $2
       `, [year, month]),
 
       // 2. Base total acumulada
@@ -47,7 +47,7 @@ export async function GET(request: Request) {
       // 3. Transacciones loyalty (solo ventas, no devoluciones)
       query(`
         SELECT
-          COUNT(DISTINCT id_crm)               AS clientes_activos,
+          COUNT(DISTINCT customer_no)          AS clientes_activos,
           COALESCE(SUM(ventasinimpuesto), 0)   AS venta_loyalty,
           COUNT(*)                              AS transacciones,
           COALESCE(SUM(piezas), 0)             AS piezas
@@ -92,7 +92,7 @@ export async function GET(request: Request) {
       query(`
         SELECT
           ABS(COALESCE(SUM(puntos_posteados), 0)) AS puntos,
-          ABS(COALESCE(SUM(monto_puntos), 0))      AS monto,
+          ABS(COALESCE(SUM(monto_redimido), 0))    AS monto,
           COUNT(DISTINCT id_crm)                   AS clientes
         FROM miniso_dlh.analytics_mx_prod.loy_redimidos_descuento_pos
         WHERE EXTRACT(YEAR  FROM fecha)::INTEGER = $1

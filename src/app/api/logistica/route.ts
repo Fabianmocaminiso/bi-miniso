@@ -55,8 +55,8 @@ function buildCedisStockQuery(year: number, month: number) {
       WITH ultima_fecha AS (
         SELECT MAX(fecha) AS fmax
         FROM miniso_dlh.analytics_mx_prod.tb_h_ventas_inventario_dimsuc_dimprod
-        WHERE year::INTEGER = $1
-          AND month         = $2
+        WHERE anio = $1
+          AND EXTRACT(MONTH FROM fecha)::INTEGER = $2
       )
       SELECT
         SUM(f.centrolf)                                                       AS cedis_lf_pzas,
@@ -66,8 +66,8 @@ function buildCedisStockQuery(year: number, month: number) {
                                                                               AS cedis_total_pzas
       FROM miniso_dlh.analytics_mx_prod.tb_h_ventas_inventario_dimsuc_dimprod f
       JOIN ultima_fecha u ON f.fecha = u.fmax
-      WHERE f.year::INTEGER = $1
-        AND f.month         = $2
+      WHERE f.anio = $1
+        AND EXTRACT(MONTH FROM f.fecha)::INTEGER = $2
         AND f.idsucursal NOT LIKE 'ARIO%'
         AND f.idsucursal NOT LIKE 'PREMIOS%'
     `,
@@ -84,8 +84,8 @@ function buildVentasMesQuery(year: number, month: number) {
         SUM(piezas)                                                           AS piezas_mes,
         COUNT(DISTINCT fecha)                                                 AS dias_con_venta
       FROM miniso_dlh.analytics_mx_prod.tb_h_ventas_inventario_dimsuc_dimprod
-      WHERE year::INTEGER = $1
-        AND month         = $2
+      WHERE anio = $1
+        AND EXTRACT(MONTH FROM fecha)::INTEGER = $2
         AND idsucursal NOT LIKE 'CEN%'
         AND idsucursal NOT LIKE 'ARIO%'
         AND idsucursal NOT LIKE 'PREMIOS%'
