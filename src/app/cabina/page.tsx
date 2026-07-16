@@ -716,7 +716,44 @@ export default function Cabina() {
                 </table>
               </div>
               <TableLegend />
-              <KpiStatusGrid kpis={KPI_CATALOG.finanzas} />
+              {/* KPI Tables — Finanzas */}
+              <KpiGroupTable title="Facturación y Volumen" cols={[
+                { id: "KPI-FIN-001", label: "Facturación Total",  getVal: p => fmtMoney(data?.[p]?.facturacion_total ?? null) },
+                { id: "KPI-FIN-003", label: "Total Piezas",       getVal: p => fmtNum(data?.[p]?.piezas ?? null) },
+                { id: "KPI-FIN-002", label: "Facturación MT",     getVal: _ => "—" },
+                { id: "KPI-FIN-004", label: "Piezas MT",          getVal: _ => "—" },
+                { id: "KPI-FIN-005", label: "% Crec. MTs AA",     getVal: _ => "—" },
+              ]} />
+              <KpiGroupTable title="Costo y Rentabilidad" cols={[
+                { id: "KPI-FIN-006", label: "Costo Ventas $",   getVal: p => fmtMoney(data?.[p]?.costo_ventas ?? null) },
+                { id: "KPI-FIN-007", label: "Costo Ventas %",   getVal: p => { const r = data?.[p]; return (r?.costo_ventas && r?.facturacion_total) ? fmtPct(r.costo_ventas / r.facturacion_total * 100) : "—"; } },
+                { id: "KPI-FIN-014", label: "Utilidad Bruta $", getVal: p => fmtMoney(data?.[p]?.utilidad_bruta ?? null) },
+                { id: "KPI-FIN-015", label: "Margen UB %",      getVal: p => fmtPct(data?.[p]?.margen_ub ?? null) },
+                { id: "KPI-FIN-012", label: "Costo Total $",    getVal: _ => "—" },
+                { id: "KPI-FIN-013", label: "Costo Total %",    getVal: _ => "—" },
+              ]} />
+              <KpiGroupTable title="Gastos Operativos" cols={[
+                { id: "KPI-FIN-016", label: "Gastos Op. $",       getVal: _ => "—" },
+                { id: "KPI-FIN-017", label: "Gastos Op. %",       getVal: _ => "—" },
+                { id: "KPI-FIN-018", label: "Gasto Nómina Op. $", getVal: _ => "—" },
+                { id: "KPI-FIN-020", label: "Gastos Ocupación $", getVal: _ => "—" },
+                { id: "KPI-FIN-022", label: "Gasto Distribución", getVal: _ => "—" },
+                { id: "KPI-FIN-023", label: "Total Gastos Op.",   getVal: _ => "—" },
+              ]} />
+              <KpiGroupTable title="EBITDA y Resultado" cols={[
+                { id: "KPI-FIN-024", label: "EBITDA Tienda $",   getVal: _ => "—" },
+                { id: "KPI-FIN-025", label: "EBITDA Tienda %",   getVal: _ => "—" },
+                { id: "KPI-FIN-028", label: "EBITDA División $",  getVal: _ => "—" },
+                { id: "KPI-FIN-030", label: "EBITDA División %",  getVal: _ => "—" },
+                { id: "KPI-FIN-034", label: "Utilidad Neta $",    getVal: _ => "—" },
+                { id: "KPI-FIN-035", label: "Utilidad Neta %",    getVal: _ => "—" },
+              ]} />
+              <KpiGroupTable title="Venta por Canal" cols={[
+                { id: "KPI-FIN-041", label: "Blind Lab",    getVal: _ => "—" },
+                { id: "KPI-FIN-042", label: "E-commerce",   getVal: _ => "—" },
+                { id: "KPI-FIN-043", label: "Marketplaces", getVal: _ => "—" },
+                { id: "KPI-FIN-044", label: "Coppel",       getVal: _ => "—" },
+              ]} />
             </>
           )}
 
@@ -821,7 +858,27 @@ export default function Cabina() {
                 </table>
               </div>
               <TableLegend />
-              <KpiStatusGrid kpis={KPI_CATALOG.operaciones} />
+              {/* KPI Tables — Operaciones */}
+              <KpiGroupTable title="Eficiencia de Venta" cols={[
+                { id: "KPI-OPS-002", label: "Ticket Promedio",    getVal: p => fmtMoney(opsData?.data?.[p]?.ticket_promedio ?? null) },
+                { id: "KPI-OPS-003", label: "Pzas / Ticket",      getVal: p => { const v = opsData?.data?.[p]?.pzas_ticket; return v != null ? v.toFixed(1) : "—"; } },
+                { id: "KPI-OPS-005", label: "Vta Prom/Tienda",    getVal: p => fmtMoney(opsData?.data?.[p]?.vta_prom_tienda ?? null) },
+                { id: "KPI-OPS-006", label: "Clientes (Tickets)", getVal: p => fmtNum(opsData?.data?.[p]?.num_tickets ?? null) },
+              ]} />
+              <KpiGroupTable title="Calidad de Operación" cols={[
+                { id: "KPI-OPS-004", label: "Conversión",        getVal: p => p === "MX" && opsData?.data?.MX?.conversion_pct != null ? fmtPct(opsData.data.MX.conversion_pct) : "—" },
+                { id: "KPI-OPS-001", label: "Cumpl. Presupuesto", getVal: _ => "—" },
+                { id: "KPI-OPS-007", label: "SKUs sin exhibir",  getVal: _ => "—" },
+                { id: "KPI-OPS-008", label: "36hrs entregas",    getVal: _ => "—" },
+                { id: "KPI-OPS-010", label: "Calif. Trade",      getVal: _ => "—" },
+                { id: "KPI-OPS-019", label: "Calif. Checklist",  getVal: _ => "—" },
+              ]} />
+              <KpiGroupTable title="Cumplimiento Presupuestal" cols={[
+                { id: "KPI-OPS-011", label: "% Comisiones",     getVal: _ => "—" },
+                { id: "KPI-OPS-012", label: "% Tiendas c/Bono", getVal: _ => "—" },
+                { id: "KPI-OPS-015", label: "% Faltante Inv.",  getVal: _ => "—" },
+                { id: "KPI-OPS-016", label: "% Ajustes",        getVal: _ => "—" },
+              ]} />
             </>
           )}
 
@@ -918,7 +975,26 @@ export default function Cabina() {
                 </table>
               </div>
               <TableLegend />
-              <KpiStatusGrid kpis={KPI_CATALOG.comercial} />
+              {/* KPI Tables — Comercial */}
+              <KpiGroupTable title="Sell-Through e Inventario" cols={[
+                { id: "KPI-COM-005", label: "Sell Thru",           getVal: p => p === "MX" ? fmtPct(comData?.MX?.sell_thru ?? null) : "—" },
+                { id: "KPI-COM-006", label: "Sell Thru AA",        getVal: _ => "—" },
+                { id: "KPI-COM-012", label: "Stock/Tienda (pzas)", getVal: p => p === "MX" ? fmtNum(comData?.MX?.stock_tienda_pzas ?? null) : "—" },
+                { id: "KPI-COM-013", label: "Stock/Tienda ($)",    getVal: p => p === "MX" ? fmtMoney(comData?.MX?.stock_tienda_valor ?? null) : "—" },
+                { id: "KPI-COM-001", label: "Precio Promedio",     getVal: p => p === "MX" ? fmtMoney(comData?.MX?.precio_promedio ?? null) : "—" },
+              ]} />
+              <KpiGroupTable title="SKUs Activos" cols={[
+                { id: "KPI-COM-008", label: "SKUs Prom/Tienda",     getVal: p => p === "MX" ? fmtNum(comData?.MX?.skus_tiendas ?? null) : "—" },
+                { id: "KPI-COM-009", label: "SKUs en CEDIS",        getVal: p => p === "MX" ? fmtNum(comData?.MX?.skus_almacen ?? null) : "—" },
+                { id: "KPI-COM-010", label: "SKUs <3 pzas CEDIS",   getVal: _ => "—" },
+                { id: "KPI-COM-011", label: "SKUs <3 pzas Tiendas", getVal: _ => "—" },
+              ]} />
+              <KpiGroupTable title="Rebajas y Canal" cols={[
+                { id: "KPI-COM-002", label: "Stock Rebajas %",  getVal: _ => "—" },
+                { id: "KPI-COM-003", label: "Piezas Rebajas %", getVal: _ => "—" },
+                { id: "KPI-COM-004", label: "Venta Rebajas %",  getVal: _ => "—" },
+                { id: "KPI-COM-007", label: "% Vta Prod. Nac.", getVal: _ => "—" },
+              ]} />
             </>
           )}
 
@@ -974,7 +1050,30 @@ export default function Cabina() {
                 </table>
               </div>
               <TableLegend />
-              <KpiStatusGrid kpis={KPI_CATALOG.rrhh} />
+              {/* KPI Tables — RRHH */}
+              <KpiGroupTable title="Headcount y Rotación — Tiendas" cols={[
+                { id: "KPI-RH-011", label: "Bajas Mes",          getVal: _ => "—" },
+                { id: "KPI-RH-012", label: "Activos Prom.",      getVal: _ => "—" },
+                { id: "KPI-RH-013", label: "Rotación Gral.",     getVal: _ => "—" },
+                { id: "KPI-RH-017", label: "Prom. Emp/Tienda",   getVal: _ => "—" },
+                { id: "KPI-RH-025", label: "% Cob. Plantilla",   getVal: _ => "—" },
+              ]} />
+              <KpiGroupTable title="Compensación Variable — Tiendas" cols={[
+                { id: "KPI-RH-027", label: "Alcance Promotor",    getVal: _ => "—" },
+                { id: "KPI-RH-029", label: "% Comp. Var. Prom.",  getVal: _ => "—" },
+                { id: "KPI-RH-030", label: "Alcance Subgerente",  getVal: _ => "—" },
+                { id: "KPI-RH-032", label: "% Comp. Var. Subg.",  getVal: _ => "—" },
+                { id: "KPI-RH-033", label: "Alcance Gerente",     getVal: _ => "—" },
+                { id: "KPI-RH-035", label: "% Comp. Var. Gte.",   getVal: _ => "—" },
+              ]} />
+              <KpiGroupTable title="Headcount — Corporativo y Almacén" cols={[
+                { id: "KPI-RH-002", label: "Bajas Corp.",       getVal: _ => "—" },
+                { id: "KPI-RH-003", label: "Activos Corp.",     getVal: _ => "—" },
+                { id: "KPI-RH-004", label: "Rotación Corp.",    getVal: _ => "—" },
+                { id: "KPI-RH-019", label: "Retención <90d",   getVal: _ => "—" },
+                { id: "KPI-RH-022", label: "Vac. Subgerente",  getVal: _ => "—" },
+                { id: "KPI-RH-023", label: "Vac. Gerente",     getVal: _ => "—" },
+              ]} />
             </>
           )}
 
@@ -1130,7 +1229,30 @@ export default function Cabina() {
                 </div>
               </div>
 
-              <KpiStatusGrid kpis={KPI_CATALOG.logistica} />
+              {/* KPI Tables — Logística */}
+              <KpiGroupTable title="Surtimiento y Fill Rate" cols={[
+                { id: "KPI-LOG-003", label: "Fill Rate %",         getVal: p => p === "MX" ? fmtPct(logData?.MX?.fill_rate_pct ?? null) : "—" },
+                { id: "KPI-LOG-001", label: "CEDIS Disp. (pzas)",  getVal: p => p === "MX" ? fmtNum(logData?.MX?.cedis_lf_pzas ?? null) : "—" },
+                { id: "KPI-LOG-022", label: "CEDIS Disp. (sem.)",  getVal: p => p === "MX" && logData?.MX?.cedis_meses != null ? `${logData.MX.cedis_meses} sem` : "—" },
+                { id: "KPI-LOG-005", label: "Total pzas surtidas", getVal: _ => "—" },
+                { id: "KPI-LOG-004", label: "OTP15",               getVal: _ => "—" },
+                { id: "KPI-LOG-034", label: "Nivel serv. CEDIS",   getVal: _ => "—" },
+              ]} />
+              <KpiGroupTable title="Inventario Total" cols={[
+                { id: "KPI-LOG-013", label: "Total inv. (pzas)",      getVal: _ => "—" },
+                { id: "KPI-LOG-014", label: "Inv. tiendas (pzas)",    getVal: _ => "—" },
+                { id: "KPI-LOG-015", label: "Inv. tránsito tiendas",  getVal: _ => "—" },
+                { id: "KPI-LOG-019", label: "Total inv. (meses)",     getVal: _ => "—" },
+                { id: "KPI-LOG-020", label: "Inv. tiendas (meses)",   getVal: _ => "—" },
+                { id: "KPI-LOG-028", label: "OTB (Open To Buy)",      getVal: _ => "—" },
+              ]} />
+              <KpiGroupTable title="Costos de Distribución" cols={[
+                { id: "KPI-LOG-002", label: "Gasto dist./venta %",  getVal: _ => "—" },
+                { id: "KPI-LOG-007", label: "Costo/pza etiquetado", getVal: _ => "—" },
+                { id: "KPI-LOG-008", label: "Costo/pza almacenada", getVal: _ => "—" },
+                { id: "KPI-LOG-009", label: "Costo/pza surtida",    getVal: _ => "—" },
+                { id: "KPI-LOG-010", label: "Costo/pza distribución",getVal: _ => "—" },
+              ]} />
             </>
           )}
 
@@ -1227,7 +1349,27 @@ export default function Cabina() {
                 </div>
               )}
 
-              <KpiStatusGrid kpis={KPI_CATALOG.marketing} />
+              {/* KPI Tables — Marketing */}
+              <KpiGroupTable title="Membresía MinisoLove" cols={[
+                { id: "KPI-MKT-005", label: "Registros Nuevos",   getVal: p => p === "MX" ? fmtNum(mktData?.registros?.nuevos_mes ?? null) : "—" },
+                { id: "KPI-MKT-013", label: "Tickets MinisoLove", getVal: p => p === "MX" ? fmtNum(mktData?.transacciones?.transacciones ?? null) : "—" },
+                { id: "KPI-MKT-015", label: "Venta MinisoLove",   getVal: p => p === "MX" ? fmtMoney(mktData?.transacciones?.venta_loyalty ?? null) : "—" },
+                { id: "KPI-MKT-016", label: "% Part. Venta",      getVal: p => { if (p !== "MX" || !mktData || !data?.MX?.facturacion_total) return "—"; return fmtPct(mktData.transacciones.venta_loyalty / data.MX.facturacion_total * 100); } },
+              ]} />
+              <KpiGroupTable title="Puntos de Fidelidad" cols={[
+                { id: "KPI-MKT-006", label: "Puntos Redim. POS",    getVal: p => p === "MX" ? fmtNum(mktData?.puntos?.redimidos_pos ?? null) : "—" },
+                { id: "KPI-MKT-007", label: "Puntos Redim. E-Comm", getVal: p => p === "MX" ? fmtNum(mktData?.puntos?.redimidos_app ?? null) : "—" },
+                { id: "KPI-MKT-008", label: "Puntos Redim. App",    getVal: p => p === "MX" ? fmtNum(mktData?.puntos?.redimidos_app ?? null) : "—" },
+                { id: "KPI-MKT-009", label: "Monto Redimidos",      getVal: p => p === "MX" ? fmtMoney(mktData?.puntos?.monto_redimidos_total ?? null) : "—" },
+                { id: "KPI-MKT-011", label: "% Redención/Venta",    getVal: p => { if (p !== "MX" || !mktData || !data?.MX?.facturacion_total) return "—"; return fmtPct(mktData.puntos.monto_redimidos_total / data.MX.facturacion_total * 100); } },
+              ]} />
+              <KpiGroupTable title="Tráfico y Retención" cols={[
+                { id: "KPI-MKT-001", label: "Visitas Tiendas",      getVal: _ => "—" },
+                { id: "KPI-MKT-012", label: "Frec. Compra Loyalty", getVal: _ => "—" },
+                { id: "KPI-MKT-014", label: "% Part. Tickets",      getVal: _ => "—" },
+                { id: "KPI-MKT-018", label: "Clientes +1 compra",   getVal: _ => "—" },
+                { id: "KPI-MKT-019", label: "Clientes +2 compras",  getVal: _ => "—" },
+              ]} />
             </>
           )}
 
@@ -1272,319 +1414,4 @@ export default function Cabina() {
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr style={{ background: "var(--bg-3)", borderTop: "0.5px solid var(--border-2)" }}>
-                      <td style={{ padding: "8px 12px", color: "var(--text-4)", fontSize: 10, letterSpacing: "0.08em" }}>LATAM</td>
-                      {Array.from({ length: 6 }).map((_, j) => (
-                        <td key={j} style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                      ))}
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-              <TableLegend />
-              <KpiStatusGrid kpis={KPI_CATALOG.auditoria} />
-            </>
-          )}
-
-        </main>
-      </div>
-
-      {/* ── BARRA CLAUDE ── */}
-      <div style={{
-        background: "var(--bg-2)", borderTop: "0.5px solid var(--border)",
-        padding: "10px 20px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
-      }}>
-        <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--red)", flexShrink: 0 }} />
-        <input
-          type="text"
-          value={pregunta}
-          onChange={(e) => setPregunta(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && preguntarIA()}
-          placeholder="Pregunta sobre los datos — ej. ¿Por qué AR tiene el margen más bajo?"
-          style={{
-            flex: 1, background: "transparent", border: "none", outline: "none",
-            fontSize: 12, color: "var(--text-2)",
-          }}
-        />
-        <button
-          onClick={preguntarIA}
-          disabled={iaLoading || !pregunta.trim()}
-          style={{
-            background: iaLoading ? "var(--bg-3)" : "var(--red)",
-            border: "none", borderRadius: 6, padding: "5px 12px",
-            fontSize: 11, color: iaLoading ? "var(--text-4)" : "#fff",
-            cursor: iaLoading ? "default" : "pointer", transition: "all 0.15s",
-          }}
-        >
-          {iaLoading ? "…" : "Enviar"}
-        </button>
-        {respuesta && (
-          <div style={{
-            position: "absolute", bottom: 56, left: 20, right: 20,
-            background: "var(--bg-3)", border: "0.5px solid var(--border-2)",
-            borderRadius: 8, padding: "12px 16px",
-            fontSize: 12, color: "var(--text-2)", lineHeight: 1.6,
-            whiteSpace: "pre-wrap", maxHeight: 160, overflowY: "auto",
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ color: "var(--red)", fontSize: 10, fontWeight: 500 }}>CLAUDE</span>
-              <button
-                onClick={() => setRespuesta("")}
-                style={{ background: "none", border: "none", color: "var(--text-4)", cursor: "pointer", fontSize: 12 }}
-              >✕</button>
-            </div>
-            {respuesta}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── KPI Inventory Grid ──────────────────────────────────────────────────────
-
-const STATUS_META: Record<KpiStatus, { bg: string; border: string; color: string; text: string }> = {
-  live:     { bg: "#0f2d0f",       border: "#166534",        color: "#4ade80", text: "✅ Live"      },
-  redshift: { bg: "#2d2000",       border: "#92400e",        color: "#fbbf24", text: "⚠️ Conectar"  },
-  plan:     { bg: "#0f1f2d",       border: "#1e3a5f",        color: "#60a5fa", text: "🔵 Targets"   },
-  missing:  { bg: "var(--bg-4)",   border: "var(--border-2)", color: "var(--text-4)", text: "❌ TI/MDM" },
-};
-
-function KpiStatusCard({ id, label, status, source }: KpiEntry) {
-  const s = STATUS_META[status];
-  return (
-    <div style={{
-      background: "var(--bg-3)",
-      border: `0.5px solid ${status === "missing" ? "var(--border)" : s.border + "70"}`,
-      borderRadius: 6,
-      padding: "7px 9px",
-      opacity: status === "missing" ? 0.5 : 1,
-      display: "flex", flexDirection: "column", gap: 3,
-    }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4 }}>
-        <span style={{ fontSize: 9, color: "#fbbf24", opacity: 0.7, fontFamily: "monospace" }}>{id}</span>
-        <span style={{
-          fontSize: 8, padding: "1px 5px", borderRadius: 3,
-          background: s.bg, border: `0.5px solid ${s.border}`,
-          color: s.color, whiteSpace: "nowrap", fontWeight: 500,
-        }}>{s.text}</span>
-      </div>
-      <div style={{ fontSize: 10, color: "var(--text-3)", lineHeight: 1.3 }}>
-        {label}
-        {source && <span style={{ color: "var(--text-4)", marginLeft: 4 }}>· {source}</span>}
-      </div>
-    </div>
-  );
-}
-
-function KpiStatusGrid({ kpis }: { kpis: KpiEntry[] }) {
-  const live = kpis.filter(k => k.status === "live").length;
-  const red  = kpis.filter(k => k.status === "redshift").length;
-  const plan = kpis.filter(k => k.status === "plan").length;
-  const miss = kpis.filter(k => k.status === "missing").length;
-  return (
-    <div style={{ marginTop: 16 }}>
-      <div style={{
-        display: "flex", alignItems: "center", gap: 10,
-        marginBottom: 8, flexWrap: "wrap",
-        paddingBottom: 8, borderBottom: "0.5px solid var(--border)",
-      }}>
-        <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 500 }}>Inventario de KPIs</span>
-        <span style={{ fontSize: 10, color: "var(--text-4)" }}>—</span>
-        <span style={{ fontSize: 10, color: "var(--text-4)" }}>{kpis.length} KPIs totales</span>
-        <span style={{ fontSize: 10, color: "#4ade80" }}>· {live} live</span>
-        {red  > 0 && <span style={{ fontSize: 10, color: "#fbbf24" }}>· {red} por conectar</span>}
-        {plan > 0 && <span style={{ fontSize: 10, color: "#60a5fa" }}>· {plan} solo targets</span>}
-        {miss > 0 && <span style={{ fontSize: 10, color: "var(--text-4)" }}>· {miss} pendiente TI/MDM</span>}
-      </div>
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(185px, 1fr))",
-        gap: 5,
-      }}>
-        {kpis.map(kpi => <KpiStatusCard key={kpi.id} {...kpi} />)}
-      </div>
-      <div style={{ display: "flex", gap: 14, marginTop: 10, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 9, color: "#4ade80" }}>✅ Live = datos en vivo en el BI</span>
-        <span style={{ fontSize: 9, color: "#fbbf24" }}>⚠️ Conectar = tabla en Redshift, falta integración</span>
-        <span style={{ fontSize: 9, color: "#60a5fa" }}>🔵 Targets = solo plan disponible (plan_kpi_*)</span>
-        <span style={{ fontSize: 9, color: "var(--text-4)" }}>❌ TI/MDM = sin fuente identificada aún</span>
-      </div>
-    </div>
-  );
-}
-
-// ─── sub-componentes ──────────────────────────────────────────────────────────
-
-function AreaHeader({ title, sub, loading, badge }: {
-  title: string; sub: string; loading?: boolean; badge?: React.ReactNode;
-}) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-      <span style={{ fontSize: 16, fontWeight: 500 }}>{title}</span>
-      <span style={{ color: "var(--text-4)" }}>·</span>
-      <span style={{ color: "var(--text-3)", fontSize: 12 }}>{sub}</span>
-      {loading && (
-        <span style={{
-          background: "var(--red-bg)", border: "0.5px solid var(--red-border)",
-          color: "var(--red)", fontSize: 10, padding: "2px 8px", borderRadius: 10,
-        }}>actualizando…</span>
-      )}
-      {badge}
-    </div>
-  );
-}
-
-function TableLegend() {
-  return (
-    <div style={{ display: "flex", gap: 16, marginTop: 8, paddingLeft: 2 }}>
-      <LegendItem color="var(--green)" label="Mejor del grupo" />
-      <LegendItem color="var(--rose)"  label="Peor del grupo" />
-      <span style={{ fontSize: 10, color: "var(--text-4)" }}>— Dato no disponible en esta tabla</span>
-    </div>
-  );
-}
-
-function SideSep() {
-  return <div style={{ height: "0.5px", background: "var(--border)", margin: "6px 0" }} />;
-}
-
-function SidePicker({ value, options, onChange }: {
-  value: string; options: string[]; onChange: (v: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div style={{ position: "relative", margin: "2px 10px" }}>
-      <div
-        onClick={() => setOpen(!open)}
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "5px 8px", background: "var(--bg-3)",
-          border: "0.5px solid var(--border-2)", borderRadius: 5,
-          fontSize: 11, color: "var(--text-2)", cursor: "pointer",
-        }}
-      >
-        {value}
-        <span style={{ fontSize: 8, color: "var(--text-4)" }}>▾</span>
-      </div>
-      {open && (
-        <div style={{
-          position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
-          background: "var(--bg-3)", border: "0.5px solid var(--border-2)",
-          borderRadius: 5, marginTop: 2, overflow: "hidden",
-        }}>
-          {options.map((opt) => (
-            <div
-              key={opt}
-              onClick={() => { onChange(opt); setOpen(false); }}
-              style={{
-                padding: "5px 8px", fontSize: 11, cursor: "pointer",
-                color: opt === value ? "var(--text-1)" : "var(--text-2)",
-                background: opt === value ? "var(--red-bg)" : "transparent",
-              }}
-            >
-              {opt}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SideSection({ label }: { label: string }) {
-  return (
-    <div style={{
-      padding: "12px 14px 4px",
-      fontSize: 10, color: "var(--text-4)",
-      letterSpacing: "0.08em", textTransform: "uppercase",
-    }}>{label}</div>
-  );
-}
-
-function SideItem({ icon, label, active }: { icon: string; label: string; active?: boolean }) {
-  return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 8,
-      padding: "7px 14px", fontSize: 12, cursor: "pointer",
-      color: active ? "var(--text-1)" : "var(--text-3)",
-      background: active ? "var(--red-bg)" : "transparent",
-      borderLeft: `2px solid ${active ? "var(--red)" : "transparent"}`,
-      transition: "all 0.1s",
-    }}>
-      <span style={{ fontSize: 13 }}>{icon}</span>
-      {label}
-    </div>
-  );
-}
-
-function KpiCard({ label, value, sub, loading, pending, kpiId }: {
-  label: string; value: string; sub?: string; loading?: boolean; pending?: boolean; kpiId?: string;
-}) {
-  return (
-    <div style={{
-      background: "var(--bg-3)", border: "0.5px solid var(--border)",
-      borderRadius: 8, padding: "10px 14px",
-    }}>
-      <div style={{ fontSize: 10, color: "var(--text-4)", letterSpacing: "0.06em", marginBottom: 4 }}>
-        {label.toUpperCase()}
-      </div>
-      <div style={{
-        fontSize: 20, fontWeight: 500,
-        color: loading || pending ? "var(--text-4)" : "var(--text-1)",
-      }}>
-        {value}
-      </div>
-      {(sub || kpiId) && (
-        <div style={{ fontSize: 10, color: "var(--text-4)", marginTop: 2 }}>
-          {kpiId ? <span style={{ color: "#fbbf24", opacity: 0.7 }}>{kpiId}</span> : sub}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Th({ children, left, width }: { children: React.ReactNode; left?: boolean; width?: number }) {
-  return (
-    <th style={{
-      padding: "9px 12px", textAlign: left ? "left" : "right",
-      color: "var(--text-4)", fontSize: 10, letterSpacing: "0.07em",
-      fontWeight: 500, textTransform: "uppercase",
-      borderBottom: "0.5px solid var(--border)",
-      whiteSpace: "nowrap", width: width || "auto",
-    }}>{children}</th>
-  );
-}
-
-function ThKpi({ children, id }: { children: React.ReactNode; id: string }) {
-  return (
-    <th style={{
-      padding: "9px 12px", textAlign: "right",
-      color: "var(--text-4)", fontSize: 10, letterSpacing: "0.07em",
-      fontWeight: 500, textTransform: "uppercase",
-      borderBottom: "0.5px solid var(--border)",
-      whiteSpace: "nowrap",
-    }}>
-      <div>{children}</div>
-      <div style={{ fontSize: 8, color: "var(--text-4)", opacity: 0.5, letterSpacing: "0.04em", marginTop: 1 }}>{id}</div>
-    </th>
-  );
-}
-
-function Td({ children }: { children: React.ReactNode }) {
-  return (
-    <td style={{
-      padding: "10px 12px", textAlign: "right",
-      fontSize: 12, borderBottom: "0.5px solid var(--border)",
-    }}>{children}</td>
-  );
-}
-
-function LegendItem({ color, label }: { color: string; label: string }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-      <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
-      <span style={{ fontSize: 10, color: "var(--text-4)" }}>{label}</span>
-    </div>
-  );
-}
+                    <tr style={{ background: "var(--bg-3)", borderTop: "0.5px solid var(--border-2)" }}
