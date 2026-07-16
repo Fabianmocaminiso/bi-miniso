@@ -1379,39 +1379,292 @@ export default function Cabina() {
           {area === "auditoria" && (
             <>
               <AreaHeader title={periodo} sub="Robo, merma y eventos de seguridad por país" badge={<BadgePending />} />
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 16 }}>
-                <KpiCard label="Robo tiendas"      value="—" sub="KPI-AUD-001" pending />
-                <KpiCard label="Merma tiendas"     value="—" sub="KPI-AUD-002" pending />
-                <KpiCard label="Eventos farderos"  value="—" sub="KPI-AUD-004" pending />
-                <KpiCard label="Robo interno"      value="—" sub="KPI-AUD-005" pending />
-              </div>
-              <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
-                  <thead>
-                    <tr style={{ background: "var(--bg-2)" }}>
-                      <Th left width={72}>País</Th>
-                      <ThKpi id="KPI-AUD-001">Robo Tiendas</ThKpi>
-                      <ThKpi id="KPI-AUD-002">Merma Tiendas</ThKpi>
-                      <ThKpi id="KPI-AUD-003">Caducados</ThKpi>
-                      <ThKpi id="KPI-AUD-004">Eventos Farderos</ThKpi>
-                      <ThKpi id="KPI-AUD-005">Robo Interno</ThKpi>
-                      <ThKpi id="KPI-AUD-006">Robo Camión</ThKpi>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {PAISES.map((pais, i) => (
-                      <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
-                        <td style={{ padding: "10px 12px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{FLAG[pais]}</span>
-                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span><span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 4 }}>{MONEDA[pais]}</span>
-                          </div>
-                        </td>
-                        {Array.from({ length: 6 }).map((_, j) => (
-                          <td key={j} style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ background: "var(--bg-3)", borderTop: "0.5px solid var(--border-2)" }}
+              {/* KPI Tables — Auditoría */}
+              <KpiGroupTable title="Merma y Pérdida" cols={[
+                { id: "KPI-AUD-001", label: "Robo Tiendas",  getVal: _ => "—" },
+                { id: "KPI-AUD-002", label: "Merma Tiendas", getVal: _ => "—" },
+                { id: "KPI-AUD-003", label: "Caducados",     getVal: _ => "—" },
+              ]} />
+              <KpiGroupTable title="Incidencias de Seguridad" cols={[
+                { id: "KPI-AUD-004", label: "Eventos Farderos", getVal: _ => "—" },
+                { id: "KPI-AUD-005", label: "Robo Interno",     getVal: _ => "—" },
+                { id: "KPI-AUD-006", label: "Robo de Camión",   getVal: _ => "—" },
+              ]} />
+            </>
+          )}
+
+        </main>
+      </div>
+
+      {/* ── BARRA CLAUDE ── */}
+      <div style={{
+        background: "var(--bg-2)", borderTop: "0.5px solid var(--border)",
+        padding: "10px 20px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
+      }}>
+        <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--red)", flexShrink: 0 }} />
+        <input
+          type="text"
+          value={pregunta}
+          onChange={(e) => setPregunta(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && preguntarIA()}
+          placeholder="Pregunta sobre los datos — ej. ¿Por qué AR tiene el margen más bajo?"
+          style={{
+            flex: 1, background: "transparent", border: "none", outline: "none",
+            fontSize: 12, color: "var(--text-2)",
+          }}
+        />
+        <button
+          onClick={preguntarIA}
+          disabled={iaLoading || !pregunta.trim()}
+          style={{
+            background: iaLoading ? "var(--bg-3)" : "var(--red)",
+            border: "none", borderRadius: 6, padding: "5px 12px",
+            fontSize: 11, color: iaLoading ? "var(--text-4)" : "#fff",
+            cursor: iaLoading ? "default" : "pointer", transition: "all 0.15s",
+          }}
+        >
+          {iaLoading ? "…" : "Enviar"}
+        </button>
+        {respuesta && (
+          <div style={{
+            position: "absolute", bottom: 56, left: 20, right: 20,
+            background: "var(--bg-3)", border: "0.5px solid var(--border-2)",
+            borderRadius: 8, padding: "12px 16px",
+            fontSize: 12, color: "var(--text-2)", lineHeight: 1.6,
+            whiteSpace: "pre-wrap", maxHeight: 160, overflowY: "auto",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ color: "var(--red)", fontSize: 10, fontWeight: 500 }}>CLAUDE</span>
+              <button
+                onClick={() => setRespuesta("")}
+                style={{ background: "none", border: "none", color: "var(--text-4)", cursor: "pointer", fontSize: 12 }}
+              >✕</button>
+            </div>
+            {respuesta}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── KPI Group Table — Sprint 9 ──────────────────────────────────────────────
+// Países como filas, KPIs como columnas. Valor real o "—".
+
+interface KpiColDef { id: string; label: string; getVal: (pais: string) => string; }
+
+function KpiGroupTable({ title, cols }: { title: string; cols: KpiColDef[] }) {
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)" }}>{title}</span>
+        <span style={{ fontSize: 10, color: "var(--text-4)" }}>· {cols.length} KPIs</span>
+      </div>
+      <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
+          <thead>
+            <tr style={{ background: "var(--bg-2)" }}>
+              <Th left width={96}>País</Th>
+              {cols.map((c) => <ThKpi key={c.id} id={c.id}>{c.label}</ThKpi>)}
+            </tr>
+          </thead>
+          <tbody>
+            {PAISES.map((pais, i) => (
+              <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
+                <td style={{ padding: "10px 12px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{pais}</span>
+                    <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
+                  </div>
+                </td>
+                {cols.map((c) => {
+                  const v = c.getVal(pais);
+                  return (
+                    <td key={c.id} style={{ padding: "10px 12px", textAlign: "right", color: v === "—" ? "var(--text-4)" : "var(--text-2)" }}>
+                      {v}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── sub-componentes ──────────────────────────────────────────────────────────
+
+function AreaHeader({ title, sub, loading, badge }: {
+  title: string; sub: string; loading?: boolean; badge?: React.ReactNode;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+      <span style={{ fontSize: 16, fontWeight: 500 }}>{title}</span>
+      <span style={{ color: "var(--text-4)" }}>·</span>
+      <span style={{ color: "var(--text-3)", fontSize: 12 }}>{sub}</span>
+      {loading && (
+        <span style={{
+          background: "var(--red-bg)", border: "0.5px solid var(--red-border)",
+          color: "var(--red)", fontSize: 10, padding: "2px 8px", borderRadius: 10,
+        }}>actualizando…</span>
+      )}
+      {badge}
+    </div>
+  );
+}
+
+function TableLegend() {
+  return (
+    <div style={{ display: "flex", gap: 16, marginTop: 8, paddingLeft: 2 }}>
+      <LegendItem color="var(--green)" label="Mejor del grupo" />
+      <LegendItem color="var(--rose)" label="Peor del grupo" />
+      <span style={{ fontSize: 10, color: "var(--text-4)" }}>— Dato no disponible en esta tabla</span>
+    </div>
+  );
+}
+
+function SideSep() {
+  return <div style={{ height: "0.5px", background: "var(--border)", margin: "6px 0" }} />;
+}
+
+function SidePicker({ value, options, onChange }: {
+  value: string; options: string[]; onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: "relative", margin: "2px 10px" }}>
+      <div
+        onClick={() => setOpen(!open)}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "5px 8px", background: "var(--bg-3)",
+          border: "0.5px solid var(--border-2)", borderRadius: 5,
+          fontSize: 11, color: "var(--text-2)", cursor: "pointer",
+        }}
+      >
+        {value}
+        <span style={{ fontSize: 8, color: "var(--text-4)" }}>▾</span>
+      </div>
+      {open && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
+          background: "var(--bg-3)", border: "0.5px solid var(--border-2)",
+          borderRadius: 5, marginTop: 2, overflow: "hidden",
+        }}>
+          {options.map((opt) => (
+            <div
+              key={opt}
+              onClick={() => { onChange(opt); setOpen(false); }}
+              style={{
+                padding: "5px 8px", fontSize: 11, cursor: "pointer",
+                color: opt === value ? "var(--text-1)" : "var(--text-2)",
+                background: opt === value ? "var(--red-bg)" : "transparent",
+              }}
+            >
+              {opt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SideSection({ label }: { label: string }) {
+  return (
+    <div style={{
+      padding: "12px 14px 4px",
+      fontSize: 10, color: "var(--text-4)",
+      letterSpacing: "0.08em", textTransform: "uppercase",
+    }}>{label}</div>
+  );
+}
+
+function SideItem({ icon, label, active }: { icon: string; label: string; active?: boolean }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 8,
+      padding: "7px 14px", fontSize: 12, cursor: "pointer",
+      color: active ? "var(--text-1)" : "var(--text-3)",
+      background: active ? "var(--red-bg)" : "transparent",
+      borderLeft: `2px solid ${active ? "var(--red)" : "transparent"}`,
+      transition: "all 0.1s",
+    }}>
+      <span style={{ fontSize: 13 }}>{icon}</span>
+      {label}
+    </div>
+  );
+}
+
+function KpiCard({ label, value, sub, loading, pending, kpiId }: {
+  label: string; value: string; sub?: string; loading?: boolean; pending?: boolean; kpiId?: string;
+}) {
+  return (
+    <div style={{
+      background: "var(--bg-3)", border: "0.5px solid var(--border)",
+      borderRadius: 8, padding: "10px 14px",
+    }}>
+      <div style={{ fontSize: 10, color: "var(--text-4)", letterSpacing: "0.06em", marginBottom: 4 }}>
+        {label.toUpperCase()}
+      </div>
+      <div style={{
+        fontSize: 20, fontWeight: 500,
+        color: loading || pending ? "var(--text-4)" : "var(--text-1)",
+      }}>
+        {value}
+      </div>
+      {(sub || kpiId) && (
+        <div style={{ fontSize: 10, color: "var(--text-4)", marginTop: 2 }}>
+          {kpiId ? <span style={{ color: "#fbbf24", opacity: 0.7 }}>{kpiId}</span> : sub}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Th({ children, left, width }: { children: React.ReactNode; left?: boolean; width?: number }) {
+  return (
+    <th style={{
+      padding: "9px 12px", textAlign: left ? "left" : "right",
+      color: "var(--text-4)", fontSize: 10, letterSpacing: "0.07em",
+      fontWeight: 500, textTransform: "uppercase",
+      borderBottom: "0.5px solid var(--border)",
+      whiteSpace: "nowrap", width: width || "auto",
+    }}>{children}</th>
+  );
+}
+
+function ThKpi({ children, id }: { children: React.ReactNode; id: string }) {
+  return (
+    <th style={{
+      padding: "9px 12px", textAlign: "right",
+      color: "var(--text-4)", fontSize: 10, letterSpacing: "0.07em",
+      fontWeight: 500, textTransform: "uppercase",
+      borderBottom: "0.5px solid var(--border)",
+      whiteSpace: "nowrap",
+    }}>
+      <div>{children}</div>
+      <div style={{ fontSize: 8, color: "var(--text-4)", opacity: 0.5, letterSpacing: "0.04em", marginTop: 1 }}>{id}</div>
+    </th>
+  );
+}
+
+function Td({ children }: { children: React.ReactNode }) {
+  return (
+    <td style={{
+      padding: "10px 12px", textAlign: "right",
+      fontSize: 12, borderBottom: "0.5px solid var(--border)",
+    }}>{children}</td>
+  );
+}
+
+function LegendItem({ color, label }: { color: string; label: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+      <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
+      <span style={{ fontSize: 10, color: "var(--text-4)" }}>{label}</span>
+    </div>
+  );
+}
