@@ -28,6 +28,7 @@ type MarketingData = {
     redimidos_app: number; monto_red_app: number;
     redimidos_gift: number; monto_red_gift: number;
     redimidos_total: number; monto_redimidos_total: number;
+    por_canal: { canal: string; ganados: number; monto_g: number; redimidos: number; monto_r: number }[];
   };
 };
 
@@ -118,6 +119,211 @@ const TRAMOS: Record<string, { prod: number; onStock: number; porCargar: number;
   CL: { prod: 12, onStock: 3, porCargar: 1, transito: 8,  cedis: 9,  transTienda: 1, tiendas: 9,  total: 43 },
   PE: { prod: 12, onStock: 3, porCargar: 1, transito: 7,  cedis: 12, transTienda: 1, tiendas: 12, total: 48 },
   AR: { prod: 12, onStock: 5, porCargar: 1, transito: 8,  cedis: 10, transTienda: 1, tiendas: 10, total: 47 },
+};
+
+// ─── Catálogo KPIs — Diccionario Empresarial v5.2 (170 KPIs) ─────────────────
+// Fuente de verdad: Diccionario_Empresarial_v5.2.md
+// Estatus:
+//   live     = dato en vivo en el BI (Redshift conectado)
+//   redshift = tabla confirmada en Redshift, pendiente conectar al BI
+//   plan     = solo tabla plan_kpi_* disponible (targets, sin transaccional)
+//   missing  = sin tabla identificada en Redshift — pendiente TI/MDM
+
+type KpiStatus = "live" | "redshift" | "plan" | "missing";
+interface KpiEntry { id: string; label: string; status: KpiStatus; source?: string; }
+
+const KPI_CATALOG: Record<string, KpiEntry[]> = {
+
+  finanzas: [
+    { id: "KPI-FIN-001", label: "Facturación Total ($)",              status: "live" },
+    { id: "KPI-FIN-002", label: "Facturación MT ($)",                 status: "live" },
+    { id: "KPI-FIN-003", label: "Facturación Total Piezas",           status: "live" },
+    { id: "KPI-FIN-004", label: "Facturación MT Piezas",              status: "redshift", source: "h_ventas_sap_mes" },
+    { id: "KPI-FIN-005", label: "% Crec. MTs vs año anterior",        status: "live" },
+    { id: "KPI-FIN-006", label: "Costo de Ventas $",                  status: "live" },
+    { id: "KPI-FIN-007", label: "Costo de Ventas %",                  status: "live" },
+    { id: "KPI-FIN-008", label: "Costo de Almacén $",                 status: "missing" },
+    { id: "KPI-FIN-009", label: "Costo de Almacén %",                 status: "missing" },
+    { id: "KPI-FIN-010", label: "Gasto Nómina Almacén $",             status: "missing" },
+    { id: "KPI-FIN-011", label: "Gasto Nómina Almacén %",             status: "missing" },
+    { id: "KPI-FIN-012", label: "Costo Total $",                      status: "missing" },
+    { id: "KPI-FIN-013", label: "Costo Total %",                      status: "missing" },
+    { id: "KPI-FIN-014", label: "Utilidad Marginal $ (UB)",           status: "live" },
+    { id: "KPI-FIN-015", label: "Utilidad Marginal %",                status: "live" },
+    { id: "KPI-FIN-016", label: "Gastos Operativos $",                status: "missing" },
+    { id: "KPI-FIN-017", label: "Gastos Operativos %",                status: "missing" },
+    { id: "KPI-FIN-018", label: "Gasto Nómina Operativa $",           status: "missing" },
+    { id: "KPI-FIN-019", label: "Gastos Nómina Operativa %",          status: "missing" },
+    { id: "KPI-FIN-020", label: "Gastos Ocupación $",                 status: "missing" },
+    { id: "KPI-FIN-021", label: "Gastos Ocupación %",                 status: "missing" },
+    { id: "KPI-FIN-022", label: "Gasto Operativo Distribución",       status: "missing" },
+    { id: "KPI-FIN-023", label: "Total Gastos de Operación",          status: "missing" },
+    { id: "KPI-FIN-024", label: "EBITDA Tienda $",                    status: "missing" },
+    { id: "KPI-FIN-025", label: "EBITDA Tienda %",                    status: "missing" },
+    { id: "KPI-FIN-026", label: "Gastos Corporativos Gestión $",      status: "missing" },
+    { id: "KPI-FIN-027", label: "Gastos Corporativos Gestión %",      status: "missing" },
+    { id: "KPI-FIN-028", label: "EBITDA División $",                  status: "missing" },
+    { id: "KPI-FIN-029", label: "EBITDA División (var.)",             status: "missing" },
+    { id: "KPI-FIN-030", label: "EBITDA División %",                  status: "missing" },
+    { id: "KPI-FIN-031", label: "Gastos Financieros (intereses)",     status: "missing" },
+    { id: "KPI-FIN-032", label: "D&A",                                status: "missing" },
+    { id: "KPI-FIN-033", label: "Impuestos",                          status: "missing" },
+    { id: "KPI-FIN-034", label: "Utilidad Neta $",                    status: "missing" },
+    { id: "KPI-FIN-035", label: "Utilidad Neta %",                    status: "missing" },
+    { id: "KPI-FIN-036", label: "Free Cash Flow",                     status: "missing" },
+    { id: "KPI-FIN-037", label: "Tasa (Spread bancario)",             status: "missing" },
+    { id: "KPI-FIN-038", label: "Deuda",                              status: "missing" },
+    { id: "KPI-FIN-039", label: "Apalancamiento vs Deuda",            status: "missing" },
+    { id: "KPI-FIN-040", label: "Montos Seguros por Recuperar",       status: "missing" },
+    { id: "KPI-FIN-041", label: "Venta Blind Lab",                    status: "missing" },
+    { id: "KPI-FIN-042", label: "Venta Online (e-commerce)",          status: "missing" },
+    { id: "KPI-FIN-043", label: "Venta Marketplaces",                 status: "missing" },
+    { id: "KPI-FIN-044", label: "Venta Coppel",                       status: "missing" },
+  ],
+
+  operaciones: [
+    { id: "KPI-OPS-001", label: "Cumplimiento presupuesto",           status: "plan",     source: "plan_kpi_operaciones" },
+    { id: "KPI-OPS-002", label: "Ticket promedio",                    status: "live" },
+    { id: "KPI-OPS-003", label: "Pzas por ticket",                    status: "live" },
+    { id: "KPI-OPS-004", label: "Conversión",                         status: "redshift", source: "h_trafico_diario" },
+    { id: "KPI-OPS-005", label: "Venta promedio por tienda",          status: "live" },
+    { id: "KPI-OPS-006", label: "Clientes (tickets)",                 status: "live" },
+    { id: "KPI-OPS-007", label: "SKUs sin exhibir",                   status: "missing" },
+    { id: "KPI-OPS-008", label: "36 hrs (entregas en tiempo)",        status: "missing" },
+    { id: "KPI-OPS-009", label: "Venta adicional",                    status: "missing" },
+    { id: "KPI-OPS-010", label: "Calificación trade tiendas",         status: "missing" },
+    { id: "KPI-OPS-011", label: "% De comisiones",                    status: "missing" },
+    { id: "KPI-OPS-012", label: "% Tiendas cobraron bono",            status: "plan",     source: "plan_kpi_operaciones" },
+    { id: "KPI-OPS-013", label: "Mejor región vs presupuesto",        status: "plan",     source: "plan_kpi_operaciones" },
+    { id: "KPI-OPS-014", label: "Peor región vs presupuesto",         status: "plan",     source: "plan_kpi_operaciones" },
+    { id: "KPI-OPS-015", label: "% Faltante inventarios",             status: "missing" },
+    { id: "KPI-OPS-016", label: "% Ajustes (devoluciones)",           status: "redshift", source: "h_ventas_sap_mes" },
+    { id: "KPI-OPS-017", label: "On Time entregas almacén-tiendas",   status: "missing" },
+    { id: "KPI-OPS-018", label: "Tickets mesa de control",            status: "missing" },
+    { id: "KPI-OPS-019", label: "Calificación Checklist",             status: "missing" },
+  ],
+
+  marketing: [
+    { id: "KPI-MKT-001", label: "Visitas tiendas",                    status: "redshift", source: "h_trafico_diario" },
+    { id: "KPI-MKT-002", label: "Sensores tiendas (actual)",          status: "missing" },
+    { id: "KPI-MKT-003", label: "Sensores tiendas (pasado)",          status: "missing" },
+    { id: "KPI-MKT-004", label: "Visitas tiendas año anterior",       status: "missing" },
+    { id: "KPI-MKT-005", label: "Registros nuevos Loyalty",           status: "live" },
+    { id: "KPI-MKT-006", label: "Puntos Redimidos POS",               status: "live" },
+    { id: "KPI-MKT-007", label: "Puntos Redimidos E-COMM",            status: "live" },
+    { id: "KPI-MKT-008", label: "Puntos Redimidos APP",               status: "live" },
+    { id: "KPI-MKT-009", label: "Monto puntos Redimidos",             status: "live" },
+    { id: "KPI-MKT-010", label: "Ventas Total Marketing",             status: "missing" },
+    { id: "KPI-MKT-011", label: "% Redención pts vs venta total",     status: "live" },
+    { id: "KPI-MKT-012", label: "Frecuencia compra top loyalty",      status: "redshift", source: "loy_customers_transactions" },
+    { id: "KPI-MKT-013", label: "Tickets registrados MinisoLove",     status: "live" },
+    { id: "KPI-MKT-014", label: "% Participación tickets MinisoLove", status: "redshift", source: "loy_customers_transactions" },
+    { id: "KPI-MKT-015", label: "Total venta MinisoLove",             status: "live" },
+    { id: "KPI-MKT-016", label: "% Part. venta MinisoLove",           status: "live" },
+    { id: "KPI-MKT-017", label: "Top POS del mes",                    status: "missing" },
+    { id: "KPI-MKT-018", label: "Clientes +1 compra en 180 días",     status: "redshift", source: "loy_customers_transactions" },
+    { id: "KPI-MKT-019", label: "Clientes +2 compras en 180 días",    status: "redshift", source: "loy_customers_transactions" },
+  ],
+
+  comercial: [
+    { id: "KPI-COM-001", label: "Precio promedio",                    status: "live" },
+    { id: "KPI-COM-002", label: "Stock Rebajas %",                    status: "missing" },
+    { id: "KPI-COM-003", label: "Piezas Rebajas %",                   status: "missing" },
+    { id: "KPI-COM-004", label: "Venta Rebajas %",                    status: "missing" },
+    { id: "KPI-COM-005", label: "Sell Thru General",                  status: "live" },
+    { id: "KPI-COM-006", label: "Sell Thru año anterior",             status: "redshift", source: "tb_h_ventas_inventario_dimsuc_dimprod" },
+    { id: "KPI-COM-007", label: "% Venta producción nacional",        status: "missing" },
+    { id: "KPI-COM-008", label: "Promedio SKUs en tiendas",           status: "live" },
+    { id: "KPI-COM-009", label: "Promedio SKUs en Almacén",           status: "live" },
+    { id: "KPI-COM-010", label: "SKU <3 pzas en CEDIS",              status: "redshift", source: "tb_h_ventas_inventario_dimsuc_dimprod" },
+    { id: "KPI-COM-011", label: "SKUs <3 pzas en Tiendas",           status: "redshift", source: "tb_h_ventas_inventario_dimsuc_dimprod" },
+    { id: "KPI-COM-012", label: "Stock prom/tienda (pzas)",           status: "live" },
+    { id: "KPI-COM-013", label: "Stock prom/tienda ($)",              status: "live" },
+  ],
+
+  logistica: [
+    { id: "KPI-LOG-001", label: "Inv CEDIS disponible (pzas)",        status: "live" },
+    { id: "KPI-LOG-002", label: "% Gasto distribución vs venta",      status: "missing" },
+    { id: "KPI-LOG-003", label: "Fill Rate surtimiento",              status: "live" },
+    { id: "KPI-LOG-004", label: "OTP15",                              status: "missing" },
+    { id: "KPI-LOG-005", label: "Total piezas surtidas a tiendas",    status: "redshift", source: "tb_h_ventas_inventario_dimsuc_dimprod" },
+    { id: "KPI-LOG-006", label: "Promedio almacenaje/semana",         status: "missing" },
+    { id: "KPI-LOG-007", label: "Costo/pieza etiquetado",             status: "missing" },
+    { id: "KPI-LOG-008", label: "Costo/pieza almacenada",             status: "missing" },
+    { id: "KPI-LOG-009", label: "Costo/pieza surtida",                status: "missing" },
+    { id: "KPI-LOG-010", label: "Costo/pieza distribución",           status: "missing" },
+    { id: "KPI-LOG-011", label: "% Carga en CEDIS (pzas)",            status: "redshift", source: "tb_h_ventas_inventario_dimsuc_dimprod" },
+    { id: "KPI-LOG-012", label: "Inventario en China (pzas)",         status: "missing" },
+    { id: "KPI-LOG-013", label: "Total inventario (pzas)",            status: "redshift", source: "tb_h_ventas_inventario_dimsuc_dimprod" },
+    { id: "KPI-LOG-014", label: "Inventario tiendas (pzas)",          status: "redshift", source: "tb_h_ventas_inventario_dimsuc_dimprod" },
+    { id: "KPI-LOG-015", label: "Inv tránsito tiendas (pzas)",        status: "redshift", source: "tb_h_ventas_inventario_dimsuc_dimprod" },
+    { id: "KPI-LOG-016", label: "Inv no disponible aduana (pzas)",    status: "missing" },
+    { id: "KPI-LOG-017", label: "Inv en tránsito China (pzas)",       status: "missing" },
+    { id: "KPI-LOG-018", label: "Inv no disponible país (pzas)",      status: "redshift", source: "tb_h_ventas_inventario_dimsuc_dimprod" },
+    { id: "KPI-LOG-019", label: "Total inventario (meses)",           status: "redshift", source: "tb_h_ventas_inventario_dimsuc_dimprod" },
+    { id: "KPI-LOG-020", label: "Inventario tiendas (meses)",         status: "redshift", source: "tb_h_ventas_inventario_dimsuc_dimprod" },
+    { id: "KPI-LOG-021", label: "Inv tránsito tiendas (meses)",       status: "redshift", source: "tb_h_ventas_inventario_dimsuc_dimprod" },
+    { id: "KPI-LOG-022", label: "Inv CEDIS disponible (meses)",       status: "live" },
+    { id: "KPI-LOG-023", label: "Inv no disp. aduana (meses)",        status: "missing" },
+    { id: "KPI-LOG-024", label: "Inv en tránsito China (meses)",      status: "missing" },
+    { id: "KPI-LOG-025", label: "Inv lib. pendiente zarpar (meses)",  status: "missing" },
+    { id: "KPI-LOG-026", label: "Inv no disponible país (meses)",     status: "redshift", source: "tb_h_ventas_inventario_dimsuc_dimprod" },
+    { id: "KPI-LOG-027", label: "Inventario en China (meses)",        status: "missing" },
+    { id: "KPI-LOG-028", label: "OTB (Open To Buy)",                  status: "missing" },
+    { id: "KPI-LOG-029", label: "Stock CEDIS disponible (MAX OnHand)", status: "redshift", source: "OITW (SAP)" },
+    { id: "KPI-LOG-030", label: "Cobertura stock envío tiendas",      status: "redshift", source: "tb_h_ventas_inventario_dimsuc_dimprod" },
+    { id: "KPI-LOG-031", label: "Sell-through stock envío",           status: "redshift", source: "tb_h_ventas_inventario_dimsuc_dimprod" },
+    { id: "KPI-LOG-032", label: "Piezas pendientes despacho",         status: "redshift", source: "tb_h_ventas_inventario_dimsuc_dimprod" },
+    { id: "KPI-LOG-033", label: "Semanas cobertura tiendas",          status: "redshift", source: "tb_h_ventas_inventario_dimsuc_dimprod" },
+    { id: "KPI-LOG-034", label: "Nivel servicio CEDIS",               status: "missing" },
+  ],
+
+  rrhh: [
+    { id: "KPI-RH-001", label: "Calificación satisfacción compañía",  status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-002", label: "Bajas mes — Corporativo",             status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-003", label: "Activos promedio — Corporativo",      status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-004", label: "Rotación Corporativo",                status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-005", label: "Bajas mes — Almacén Operativo",       status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-006", label: "Activos prom. — Almacén Operativo",   status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-007", label: "Rotación operativa almacén",          status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-008", label: "Bajas mes — Maquila Almacén",         status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-009", label: "Activos promedio — Maquila",          status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-010", label: "Rotación maquila almacén",            status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-011", label: "Bajas mes — General Tiendas",         status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-012", label: "Activos prom. — Gral. Tiendas",       status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-013", label: "Rotación general tiendas",            status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-014", label: "Bajas mes — Gerente Tiendas",         status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-015", label: "Activos promedio — Gerentes",         status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-016", label: "Rotación gerentes tiendas",           status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-017", label: "Promedio empleados x tienda",         status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-018", label: "Promedio empleados x venta",          status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-019", label: "Retención personal <90 días",         status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-020", label: "T. prom. contratación Gerenciales",   status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-021", label: "T. prom. contratación Promotores",    status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-022", label: "Vacantes Subgerente",                 status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-023", label: "Vacantes Gerente",                    status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-024", label: "% Cobertura interna gerenciales",     status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-025", label: "% Cobertura plantilla tienda",        status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-026", label: "% Cobertura plantilla almacén",       status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-027", label: "Alcance comisión Promotor",           status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-028", label: "Target proyectado Promotor",          status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-029", label: "% Alcance comp. variable Promotores", status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-030", label: "Alcance comisión Subgerente",         status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-031", label: "Target proyectado Subgerente",        status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-032", label: "% Alcance comp. var. Subgerentes",    status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-033", label: "Alcance comisión Gerente",            status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-034", label: "Target proyectado Gerente",           status: "plan", source: "plan_kpi_recursos_humanos" },
+    { id: "KPI-RH-035", label: "% Alcance comp. variable Gerentes",   status: "plan", source: "plan_kpi_recursos_humanos" },
+  ],
+
+  auditoria: [
+    { id: "KPI-AUD-001", label: "Robo tiendas",                       status: "plan", source: "plan_kpi_auditoria" },
+    { id: "KPI-AUD-002", label: "Merma tiendas",                      status: "plan", source: "plan_kpi_auditoria" },
+    { id: "KPI-AUD-003", label: "Caducados tienda",                   status: "plan", source: "plan_kpi_auditoria" },
+    { id: "KPI-AUD-004", label: "Eventos farderos",                   status: "plan", source: "plan_kpi_auditoria" },
+    { id: "KPI-AUD-005", label: "Eventos robo interno",               status: "plan", source: "plan_kpi_auditoria" },
+    { id: "KPI-AUD-006", label: "Robo de camión",                     status: "plan", source: "plan_kpi_auditoria" },
+  ],
 };
 
 // ─── formatters ───────────────────────────────────────────────────────────────
@@ -510,6 +716,7 @@ export default function Cabina() {
                 </table>
               </div>
               <TableLegend />
+              <KpiStatusGrid kpis={KPI_CATALOG.finanzas} />
             </>
           )}
 
@@ -614,9 +821,7 @@ export default function Cabina() {
                 </table>
               </div>
               <TableLegend />
-              <div style={{ marginTop: 12, padding: "10px 14px", background: "var(--bg-3)", border: "0.5px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-4)" }}>
-                Pendiente Redshift: KPI-OPS-006 Clientes (CO/PE/CL/AR) · KPI-OPS-017 OTD Almacén (Manhattan) · KPI-OPS-007 SKUs sin exhibir · KPI-OPS-012 % Tiendas con bono
-              </div>
+              <KpiStatusGrid kpis={KPI_CATALOG.operaciones} />
             </>
           )}
 
@@ -713,9 +918,7 @@ export default function Cabina() {
                 </table>
               </div>
               <TableLegend />
-              <div style={{ marginTop: 12, padding: "10px 14px", background: "var(--bg-3)", border: "0.5px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-4)" }}>
-                Pendiente Redshift: CO/PE/CL/AR h_ventas_inventario por país · KPI-COM-006 Sell Thru AA · KPI-COM-010/011 SKUs &lt;3 pzas · KPI-COM-002/003/004 Descuentos
-              </div>
+              <KpiStatusGrid kpis={KPI_CATALOG.comercial} />
             </>
           )}
 
@@ -771,9 +974,7 @@ export default function Cabina() {
                 </table>
               </div>
               <TableLegend />
-              <div style={{ marginTop: 12, padding: "10px 14px", background: "var(--bg-3)", border: "0.5px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-4)" }}>
-                KPIs adicionales pendientes: KPI-RH-001 Satisfacción · KPI-RH-004 Rotación Corporativo · KPI-RH-007 Rotación Almacén · KPI-RH-019 Retención &lt;90 días · KPI-RH-024 % Cobertura interna gerenciales · KPI-RH-032/035 % Alcance comp. subgte/gte
-              </div>
+              <KpiStatusGrid kpis={KPI_CATALOG.rrhh} />
             </>
           )}
 
@@ -929,9 +1130,7 @@ export default function Cabina() {
                 </div>
               </div>
 
-              <div style={{ marginTop: 4, padding: "10px 14px", background: "var(--bg-3)", border: "0.5px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-4)" }}>
-                KPIs pendientes Redshift: KPI-LOG-006 Prom almacenaje/sem · KPI-LOG-007/008/009/010 Costos por pieza · KPI-LOG-011 % Carga CEDIS · KPI-LOG-012 Inv China · KPI-LOG-013 Total inv (pzas) · KPI-LOG-014/015 Inv tiendas/tránsito
-              </div>
+              <KpiStatusGrid kpis={KPI_CATALOG.logistica} />
             </>
           )}
 
@@ -989,39 +1188,17 @@ export default function Cabina() {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
                   <thead>
                     <tr style={{ background: "var(--bg-2)" }}>
-                      <Th left width={130}>Canal</Th>
-                      <ThKpi id="KPI-MKT-006">Pts Ganados</ThKpi>
-                      <ThKpi id="KPI-MKT-006">Monto Ganado</ThKpi>
-                      <ThKpi id="KPI-MKT-007">Pts Redimidos</ThKpi>
-                      <ThKpi id="KPI-MKT-009">Monto Redimido</ThKpi>
+                      <Th left>Canal</Th>
+                      <ThKpi id="KPI-MKT-006/007/008">Pts Ganados</ThKpi>
+                      <ThKpi id="">Monto Ganados</ThKpi>
+                      <ThKpi id="KPI-MKT-006/007/008">Pts Redimidos</ThKpi>
+                      <ThKpi id="KPI-MKT-009">Monto Redimidos</ThKpi>
                     </tr>
                   </thead>
                   <tbody>
-                    {[
-                      {
-                        canal: "🏪 POS (Tiendas)",
-                        ganados: mktData?.puntos.ganados_pos ?? null,
-                        monto_g: mktData?.puntos.monto_pos ?? null,
-                        redimidos: mktData?.puntos.redimidos_pos ?? null,
-                        monto_r: mktData?.puntos.monto_red_pos ?? null,
-                      },
-                      {
-                        canal: "🛒 E-commerce",
-                        ganados: mktData?.puntos.ganados_ecom ?? null,
-                        monto_g: mktData?.puntos.monto_ecom ?? null,
-                        redimidos: mktData?.puntos.redimidos_gift ?? null,
-                        monto_r: mktData?.puntos.monto_red_gift ?? null,
-                      },
-                      {
-                        canal: "📱 App Miniso",
-                        ganados: mktData?.puntos.ganados_app ?? null,
-                        monto_g: mktData?.puntos.monto_app ?? null,
-                        redimidos: mktData?.puntos.redimidos_app ?? null,
-                        monto_r: mktData?.puntos.monto_red_app ?? null,
-                      },
-                    ].map((row, i) => (
+                    {mktData?.puntos.por_canal.map((row, i) => (
                       <tr key={row.canal} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
-                        <td style={{ padding: "10px 12px", color: "var(--text-1)", fontWeight: 500 }}>{row.canal}</td>
+                        <td style={{ padding: "10px 12px", color: "var(--text-2)", fontWeight: 500 }}>{row.canal}</td>
                         <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-2)" }}>{fmtNum(row.ganados)}</td>
                         <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-2)" }}>{fmtMoney(row.monto_g)}</td>
                         <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-2)" }}>{fmtNum(row.redimidos)}</td>
@@ -1050,9 +1227,7 @@ export default function Cabina() {
                 </div>
               )}
 
-              <div style={{ marginTop: 4, padding: "10px 14px", background: "var(--bg-3)", border: "0.5px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-4)" }}>
-                Datos solo MX · KPI-MKT-001/002/003 Tráfico/Sensores pendiente integración Getin · CO/PE/CL/AR sin loyalty Redshift
-              </div>
+              <KpiStatusGrid kpis={KPI_CATALOG.marketing} />
             </>
           )}
 
@@ -1086,7 +1261,7 @@ export default function Cabina() {
                       <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
                         <td style={{ padding: "10px 12px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{pais}</span>
+                            <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{FLAG[pais]}</span>
                             <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span><span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 4 }}>{MONEDA[pais]}</span>
                           </div>
                         </td>
@@ -1107,10 +1282,7 @@ export default function Cabina() {
                 </table>
               </div>
               <TableLegend />
-              <div style={{ marginTop: 12, padding: "10px 14px", background: "var(--bg-3)", border: "0.5px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-4)", lineHeight: 1.6 }}>
-                <span style={{ color: "var(--rose)", fontWeight: 500 }}>Datos sensibles — </span>
-                acceso restringido. Fuente: sistema de auditoría interno. Pendiente integración con Redshift o API directa.
-              </div>
+              <KpiStatusGrid kpis={KPI_CATALOG.auditoria} />
             </>
           )}
 
@@ -1130,23 +1302,21 @@ export default function Cabina() {
           onKeyDown={(e) => e.key === "Enter" && preguntarIA()}
           placeholder="Pregunta sobre los datos — ej. ¿Por qué AR tiene el margen más bajo?"
           style={{
-            flex: 1, background: "var(--bg-3)", border: "0.5px solid var(--border-2)",
-            borderRadius: 6, color: "var(--text-1)", fontSize: 12,
-            padding: "7px 12px", outline: "none",
+            flex: 1, background: "transparent", border: "none", outline: "none",
+            fontSize: 12, color: "var(--text-2)",
           }}
         />
         <button
           onClick={preguntarIA}
-          disabled={iaLoading || !data}
+          disabled={iaLoading || !pregunta.trim()}
           style={{
-            background: iaLoading || !data ? "var(--bg-4)" : "var(--red)",
-            border: "none", color: "#fff", fontSize: 12, fontWeight: 500,
-            padding: "7px 16px", borderRadius: 6,
-            cursor: iaLoading || !data ? "not-allowed" : "pointer",
-            transition: "background 0.15s", flexShrink: 0,
+            background: iaLoading ? "var(--bg-3)" : "var(--red)",
+            border: "none", borderRadius: 6, padding: "5px 12px",
+            fontSize: 11, color: iaLoading ? "var(--text-4)" : "#fff",
+            cursor: iaLoading ? "default" : "pointer", transition: "all 0.15s",
           }}
         >
-          {iaLoading ? "…" : "Preguntar"}
+          {iaLoading ? "…" : "Enviar"}
         </button>
         {respuesta && (
           <div style={{
@@ -1166,6 +1336,79 @@ export default function Cabina() {
             {respuesta}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── KPI Inventory Grid ──────────────────────────────────────────────────────
+
+const STATUS_META: Record<KpiStatus, { bg: string; border: string; color: string; text: string }> = {
+  live:     { bg: "#0f2d0f",       border: "#166534",        color: "#4ade80", text: "✅ Live"      },
+  redshift: { bg: "#2d2000",       border: "#92400e",        color: "#fbbf24", text: "⚠️ Conectar"  },
+  plan:     { bg: "#0f1f2d",       border: "#1e3a5f",        color: "#60a5fa", text: "🔵 Targets"   },
+  missing:  { bg: "var(--bg-4)",   border: "var(--border-2)", color: "var(--text-4)", text: "❌ TI/MDM" },
+};
+
+function KpiStatusCard({ id, label, status, source }: KpiEntry) {
+  const s = STATUS_META[status];
+  return (
+    <div style={{
+      background: "var(--bg-3)",
+      border: `0.5px solid ${status === "missing" ? "var(--border)" : s.border + "70"}`,
+      borderRadius: 6,
+      padding: "7px 9px",
+      opacity: status === "missing" ? 0.5 : 1,
+      display: "flex", flexDirection: "column", gap: 3,
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4 }}>
+        <span style={{ fontSize: 9, color: "#fbbf24", opacity: 0.7, fontFamily: "monospace" }}>{id}</span>
+        <span style={{
+          fontSize: 8, padding: "1px 5px", borderRadius: 3,
+          background: s.bg, border: `0.5px solid ${s.border}`,
+          color: s.color, whiteSpace: "nowrap", fontWeight: 500,
+        }}>{s.text}</span>
+      </div>
+      <div style={{ fontSize: 10, color: "var(--text-3)", lineHeight: 1.3 }}>
+        {label}
+        {source && <span style={{ color: "var(--text-4)", marginLeft: 4 }}>· {source}</span>}
+      </div>
+    </div>
+  );
+}
+
+function KpiStatusGrid({ kpis }: { kpis: KpiEntry[] }) {
+  const live = kpis.filter(k => k.status === "live").length;
+  const red  = kpis.filter(k => k.status === "redshift").length;
+  const plan = kpis.filter(k => k.status === "plan").length;
+  const miss = kpis.filter(k => k.status === "missing").length;
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 10,
+        marginBottom: 8, flexWrap: "wrap",
+        paddingBottom: 8, borderBottom: "0.5px solid var(--border)",
+      }}>
+        <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 500 }}>Inventario de KPIs</span>
+        <span style={{ fontSize: 10, color: "var(--text-4)" }}>—</span>
+        <span style={{ fontSize: 10, color: "var(--text-4)" }}>{kpis.length} KPIs totales</span>
+        <span style={{ fontSize: 10, color: "#4ade80" }}>· {live} live</span>
+        {red  > 0 && <span style={{ fontSize: 10, color: "#fbbf24" }}>· {red} por conectar</span>}
+        {plan > 0 && <span style={{ fontSize: 10, color: "#60a5fa" }}>· {plan} solo targets</span>}
+        {miss > 0 && <span style={{ fontSize: 10, color: "var(--text-4)" }}>· {miss} pendiente TI/MDM</span>}
+      </div>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(185px, 1fr))",
+        gap: 5,
+      }}>
+        {kpis.map(kpi => <KpiStatusCard key={kpi.id} {...kpi} />)}
+      </div>
+      <div style={{ display: "flex", gap: 14, marginTop: 10, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 9, color: "#4ade80" }}>✅ Live = datos en vivo en el BI</span>
+        <span style={{ fontSize: 9, color: "#fbbf24" }}>⚠️ Conectar = tabla en Redshift, falta integración</span>
+        <span style={{ fontSize: 9, color: "#60a5fa" }}>🔵 Targets = solo plan disponible (plan_kpi_*)</span>
+        <span style={{ fontSize: 9, color: "var(--text-4)" }}>❌ TI/MDM = sin fuente identificada aún</span>
       </div>
     </div>
   );
@@ -1332,16 +1575,16 @@ function Td({ children }: { children: React.ReactNode }) {
   return (
     <td style={{
       padding: "10px 12px", textAlign: "right",
-      fontVariantNumeric: "tabular-nums",
+      fontSize: 12, borderBottom: "0.5px solid var(--border)",
     }}>{children}</td>
   );
 }
 
 function LegendItem({ color, label }: { color: string; label: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "var(--text-4)" }}>
-      <div style={{ width: 6, height: 6, borderRadius: "50%", background: color }} />
-      {label}
+    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+      <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
+      <span style={{ fontSize: 10, color: "var(--text-4)" }}>{label}</span>
     </div>
   );
 }
