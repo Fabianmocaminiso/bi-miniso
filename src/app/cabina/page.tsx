@@ -410,6 +410,7 @@ function BadgePending() {
 export default function Cabina() {
   const [year,  setYear]  = useState(NOW.getFullYear());
   const [month, setMonth] = useState(NOW.getMonth() + 1);
+  const [ptype, setPtype] = useState("mes"); // mes | ytd | ltm
   const [data,  setData]  = useState<CabinaData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -443,24 +444,24 @@ export default function Cabina() {
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    fetch(`/api/cabina?year=${year}&month=${month}`)
+    fetch(`/api/cabina?year=${year}&month=${month}&period=${ptype}`)
       .then((r) => r.json())
       .then((d) => { if (d.ok) setData(d.data); else setError(d.error); })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [year, month]);
+  }, [year, month, ptype]);
 
   useEffect(() => { load(); }, [load]);
 
   const loadMarketing = useCallback(() => {
     setMktLoading(true);
     setMktError(null);
-    fetch(`/api/marketing?year=${year}&month=${month}`)
+    fetch(`/api/marketing?year=${year}&month=${month}&period=${ptype}`)
       .then((r) => r.json())
       .then((d) => { if (d.ok) setMktData(d.data); else setMktError(d.error); })
       .catch((e) => setMktError(e.message))
       .finally(() => setMktLoading(false));
-  }, [year, month]);
+  }, [year, month, ptype]);
 
   useEffect(() => {
     if (area === "marketing") loadMarketing();
@@ -469,12 +470,12 @@ export default function Cabina() {
   const loadOperaciones = useCallback(() => {
     setOpsLoading(true);
     setOpsError(null);
-    fetch(`/api/operaciones?year=${year}&month=${month}`)
+    fetch(`/api/operaciones?year=${year}&month=${month}&period=${ptype}`)
       .then((r) => r.json())
       .then((d) => { if (d.ok) setOpsData(d); else setOpsError(d.error); })
       .catch((e) => setOpsError(e.message))
       .finally(() => setOpsLoading(false));
-  }, [year, month]);
+  }, [year, month, ptype]);
 
   useEffect(() => {
     if (area === "operaciones") loadOperaciones();
@@ -483,12 +484,12 @@ export default function Cabina() {
   const loadComercial = useCallback(() => {
     setComLoading(true);
     setComError(null);
-    fetch(`/api/comercial?year=${year}&month=${month}`)
+    fetch(`/api/comercial?year=${year}&month=${month}&period=${ptype}`)
       .then((r) => r.json())
       .then((d) => { if (d.ok) setComData(d); else setComError(d.error); })
       .catch((e) => setComError(e.message))
       .finally(() => setComLoading(false));
-  }, [year, month]);
+  }, [year, month, ptype]);
 
   useEffect(() => {
     if (area === "comercial") loadComercial();
@@ -497,12 +498,12 @@ export default function Cabina() {
   const loadLogistica = useCallback(() => {
     setLogLoading(true);
     setLogError(null);
-    fetch(`/api/logistica?year=${year}&month=${month}`)
+    fetch(`/api/logistica?year=${year}&month=${month}&period=${ptype}`)
       .then((r) => r.json())
       .then((d) => { if (d.ok) setLogData(d); else setLogError(d.error); })
       .catch((e) => setLogError(e.message))
       .finally(() => setLogLoading(false));
-  }, [year, month]);
+  }, [year, month, ptype]);
 
   useEffect(() => {
     if (area === "logistica") loadLogistica();
@@ -535,7 +536,10 @@ export default function Cabina() {
     piezas:      PAISES.reduce((s, p) => s + (data[p]?.piezas || 0), 0),
   } : null;
 
-  const periodo = `${MESES[month - 1]} ${year}`;
+  const periodo =
+    ptype === "ytd" ? `YTD ${MESES[month - 1]} ${year}` :
+    ptype === "ltm" ? `LTM a ${MESES[month - 1]} ${year}` :
+    `${MESES[month - 1]} ${year}`;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--bg-0)", overflow: "hidden" }}>
@@ -595,6 +599,7 @@ export default function Cabina() {
           <SideItem icon="⊞" label="Tiendas" />
           <SideSep />
           <SideSection label="Período" />
+          <SidePicker value={ptype === "mes" ? "Mes" : ptype === "ytd" ? "YTD" : "LTM"} options={["Mes", "YTD", "LTM"]} onChange={(v) => setPtype(v === "Mes" ? "mes" : v === "YTD" ? "ytd" : "ltm")} />
           <SidePicker value={MESES[month - 1]} options={MESES} onChange={(v) => setMonth(MESES.indexOf(v) + 1)} />
           <SidePicker value={String(year)} options={["2024", "2025", "2026"]} onChange={(v) => setYear(Number(v))} />
           <button
