@@ -2,39 +2,49 @@ import { NextResponse } from "next/server";
 import { query } from "@/lib/redshift";
 
 // ─── Tablas por país ──────────────────────────────────────────────────────────
-// MX: miniso_dlh.analytics_mx_prod.h_ventas_sap_mes  (col: sucursal, total_vta_siva, costo_venta, unidades, ticket)
-// AR: miniso_dlh.analytics_ar_prod.h_ventas_sap_mes  (misma estructura que MX)
+// MX: miniso_dlh.analytics_mx_prod.h_ventas_sap_mes (col: sucursal, total_vta_siva, costo_venta, unidades, ticket)
+// AR: miniso_dlh.analytics_ar_prod.h_ventas_sap_mes (misma estructura que MX)
 // CO: miniso_dlh.analytics_co_prod.h_punto_de_ventas (col: idsucursal, ventasinimpuesto, piezas, numticket)
 // PE: miniso_dlh.analytics_pe_prod.h_punto_de_ventas
 // CL: miniso_dlh.analytics_cl_prod.h_punto_de_ventas
 
-// ─── MX query ────────────────────────────────────────────────────────────────
-// NOTA: en h_ventas_sap_mes el campo `sucursal` contiene NOMBRES de tienda,
+// ─── Períodos (Sprint 10) ────────────────────────────────────────────────────
+// mes = mes puntual · ytd = Ene..mes del año · ltm = últimos 12 meses cerrando en mes
+// $1 = year de referencia, $2 = month de referencia
+
+type Period = "mes" | "ytd" | "ltm";
+
+function periodCondition(period: Period): string {
+  if (period === "ytd") return "year = $1 AND month <= $2";
+  if (period === "ltm") return "((year = $1 AND month <= $2) OR (year = $1 - 1 AND month > $2))";
+  return "year = $1 AND month = $2";
+}
+
+// NOTA MX: en h_ventas_sap_mes el campo `sucursal` contiene NOMBRES de tienda,
 // no códigos (T0xxx). Cada tienda aparece hasta 3 veces con prefijos:
-//   - nombre base: "PARQUE DELTA"            ← transacción real de POS
-//   - "ARIO PARQUE DELTA"                    ← registro de app ARIO (duplicado)
-//   - "PREMIOS LOYALTY PARQUE DELTA"         ← registro de loyalty (duplicado)
+// - nombre base: "PARQUE DELTA" ← transacción real de POS
+// - "ARIO PARQUE DELTA" ← registro de app ARIO (duplicado)
+// - "PREMIOS LOYALTY PARQUE DELTA" ← registro de loyalty (duplicado)
 // Filtramos SOLO el nombre base para evitar doble/triple conteo.
 
-function buildMXQuery(year: number, month: number) {
+function buildMXQuery(year: number, month: number, period: Period) {
   return {
     sql: `
       SELECT
-        COUNT(DISTINCT sucursal)                                        AS num_tiendas,
-        SUM(total_vta_siva)                                             AS facturacion_total,
-        SUM(costo_venta)                                                AS costo_ventas,
-        SUM(total_vta_siva) - SUM(costo_venta)                          AS utilidad_bruta,
+        COUNT(DISTINCT sucursal) AS num_tiendas,
+        SUM(total_vta_siva) AS facturacion_total,
+        SUM(costo_venta) AS costo_ventas,
+        SUM(total_vta_siva) - SUM(costo_venta) AS utilidad_bruta,
         CASE WHEN SUM(total_vta_siva) > 0
-          THEN (SUM(total_vta_siva) - SUM(costo_venta))
-               / SUM(total_vta_siva) * 100
-          ELSE 0 END                                                    AS margen_ub,
-        SUM(unidades)                                                   AS piezas,
+             THEN (SUM(total_vta_siva) - SUM(costo_venta))
+                  / SUM(total_vta_siva) * 100
+             ELSE 0 END AS margen_ub,
+        SUM(unidades) AS piezas,
         CASE WHEN COUNT(DISTINCT ticket) > 0
-          THEN SUM(total_vta_siva) / COUNT(DISTINCT ticket)
-          ELSE 0 END                                                    AS ticket_promedio
+             THEN SUM(total_vta_siva) / COUNT(DISTINCT ticket)
+             ELSE 0 END AS ticket_promedio
       FROM miniso_dlh.analytics_mx_prod.h_ventas_sap_mes
-      WHERE year  = $1
-        AND month = $2
+      WHERE ${periodCondition(period)}
         AND sucursal NOT LIKE 'ARIO %'
         AND sucursal NOT LIKE 'PREMIOS%'
     `,
@@ -44,26 +54,25 @@ function buildMXQuery(year: number, month: number) {
 
 // ─── AR query ────────────────────────────────────────────────────────────────
 
-function buildARQuery(year: number, month: number) {
+function buildARQuery(year: number, month: number, period: Period) {
   return {
     sql: `
       SELECT
-        COUNT(DISTINCT id_sucursal)                                     AS num_tiendas,
-        SUM(total_vta_siva)                                             AS facturacion_total,
-        SUM(costo_venta)                                                AS costo_ventas,
-        SUM(total_vta_siva) - SUM(costo_venta)                          AS utilidad_bruta,
+        COUNT(DISTINCT id_sucursal) AS num_tiendas,
+        SUM(total_vta_siva) AS facturacion_total,
+        SUM(costo_venta) AS costo_ventas,
+        SUM(total_vta_siva) - SUM(costo_venta) AS utilidad_bruta,
         CASE WHEN SUM(total_vta_siva) > 0
-          THEN (SUM(total_vta_siva) - SUM(costo_venta))
-               / SUM(total_vta_siva) * 100
-          ELSE 0 END                                                    AS margen_ub,
-        SUM(unidades)                                                   AS piezas,
+             THEN (SUM(total_vta_siva) - SUM(costo_venta))
+                  / SUM(total_vta_siva) * 100
+             ELSE 0 END AS margen_ub,
+        SUM(unidades) AS piezas,
         CASE WHEN COUNT(DISTINCT ticket) > 0
-          THEN SUM(total_vta_siva) / COUNT(DISTINCT ticket)
-          ELSE 0 END                                                    AS ticket_promedio
+             THEN SUM(total_vta_siva) / COUNT(DISTINCT ticket)
+             ELSE 0 END AS ticket_promedio
       FROM miniso_dlh.analytics_ar_prod.h_ventas_sap_mes
       WHERE id_sucursal LIKE 'AR%'
-        AND year  = $1
-        AND month = $2
+        AND ${periodCondition(period)}
     `,
     params: [year, month],
   };
@@ -71,22 +80,21 @@ function buildARQuery(year: number, month: number) {
 
 // ─── CO query ────────────────────────────────────────────────────────────────
 
-function buildCOQuery(year: number, month: number) {
+function buildCOQuery(year: number, month: number, period: Period) {
   return {
     sql: `
       SELECT
-        COUNT(DISTINCT idsucursal)                                      AS num_tiendas,
-        SUM(ventasinimpuesto)                                           AS facturacion_total,
-        NULL::NUMERIC                                                   AS costo_ventas,
-        NULL::NUMERIC                                                   AS utilidad_bruta,
-        NULL::NUMERIC                                                   AS margen_ub,
-        SUM(piezas)                                                     AS piezas,
+        COUNT(DISTINCT idsucursal) AS num_tiendas,
+        SUM(ventasinimpuesto) AS facturacion_total,
+        NULL::NUMERIC AS costo_ventas,
+        NULL::NUMERIC AS utilidad_bruta,
+        NULL::NUMERIC AS margen_ub,
+        SUM(piezas) AS piezas,
         CASE WHEN COUNT(DISTINCT numticket) > 0
-          THEN SUM(ventasinimpuesto) / COUNT(DISTINCT numticket)
-          ELSE 0 END                                                    AS ticket_promedio
+             THEN SUM(ventasinimpuesto) / COUNT(DISTINCT numticket)
+             ELSE 0 END AS ticket_promedio
       FROM miniso_dlh.analytics_co_prod.h_punto_de_ventas
-      WHERE year  = $1
-        AND month = $2
+      WHERE ${periodCondition(period)}
         AND idsucursal NOT IN (
           'BG-ZT','CO-T0037','BG-CL 93','T0027','T0028',
           'CO-T0039','CO-T0050','CO-T0069',
@@ -105,22 +113,21 @@ function buildCOQuery(year: number, month: number) {
 
 // ─── PE query ────────────────────────────────────────────────────────────────
 
-function buildPEQuery(year: number, month: number) {
+function buildPEQuery(year: number, month: number, period: Period) {
   return {
     sql: `
       SELECT
-        COUNT(DISTINCT idsucursal)                                      AS num_tiendas,
-        SUM(ventasinimpuesto)                                           AS facturacion_total,
-        NULL::NUMERIC                                                   AS costo_ventas,
-        NULL::NUMERIC                                                   AS utilidad_bruta,
-        NULL::NUMERIC                                                   AS margen_ub,
-        SUM(piezas)                                                     AS piezas,
+        COUNT(DISTINCT idsucursal) AS num_tiendas,
+        SUM(ventasinimpuesto) AS facturacion_total,
+        NULL::NUMERIC AS costo_ventas,
+        NULL::NUMERIC AS utilidad_bruta,
+        NULL::NUMERIC AS margen_ub,
+        SUM(piezas) AS piezas,
         CASE WHEN COUNT(DISTINCT numticket) > 0
-          THEN SUM(ventasinimpuesto) / COUNT(DISTINCT numticket)
-          ELSE 0 END                                                    AS ticket_promedio
+             THEN SUM(ventasinimpuesto) / COUNT(DISTINCT numticket)
+             ELSE 0 END AS ticket_promedio
       FROM miniso_dlh.analytics_pe_prod.h_punto_de_ventas
-      WHERE year  = $1
-        AND month = $2
+      WHERE ${periodCondition(period)}
         AND idsucursal LIKE 'PR02%'
         AND idsucursal LIKE '%-DI'
     `,
@@ -130,22 +137,21 @@ function buildPEQuery(year: number, month: number) {
 
 // ─── CL query ────────────────────────────────────────────────────────────────
 
-function buildCLQuery(year: number, month: number) {
+function buildCLQuery(year: number, month: number, period: Period) {
   return {
     sql: `
       SELECT
-        COUNT(DISTINCT idsucursal)                                      AS num_tiendas,
-        SUM(ventasinimpuesto)                                           AS facturacion_total,
-        NULL::NUMERIC                                                   AS costo_ventas,
-        NULL::NUMERIC                                                   AS utilidad_bruta,
-        NULL::NUMERIC                                                   AS margen_ub,
-        SUM(piezas)                                                     AS piezas,
+        COUNT(DISTINCT idsucursal) AS num_tiendas,
+        SUM(ventasinimpuesto) AS facturacion_total,
+        NULL::NUMERIC AS costo_ventas,
+        NULL::NUMERIC AS utilidad_bruta,
+        NULL::NUMERIC AS margen_ub,
+        SUM(piezas) AS piezas,
         CASE WHEN COUNT(DISTINCT numticket) > 0
-          THEN SUM(ventasinimpuesto) / COUNT(DISTINCT numticket)
-          ELSE 0 END                                                    AS ticket_promedio
+             THEN SUM(ventasinimpuesto) / COUNT(DISTINCT numticket)
+             ELSE 0 END AS ticket_promedio
       FROM miniso_dlh.analytics_cl_prod.h_punto_de_ventas
-      WHERE year  = $1
-        AND month = $2
+      WHERE ${periodCondition(period)}
         AND idsucursal LIKE 'CL0%'
         AND idsucursal LIKE '%-DI'
     `,
@@ -155,7 +161,7 @@ function buildCLQuery(year: number, month: number) {
 
 // ─── handler ─────────────────────────────────────────────────────────────────
 
-type QueryBuilder = (year: number, month: number) => { sql: string; params: (string | number)[] };
+type QueryBuilder = (year: number, month: number, period: Period) => { sql: string; params: (string | number)[] };
 
 const QUERY_BUILDERS: Record<string, QueryBuilder> = {
   MX: buildMXQuery,
@@ -167,25 +173,27 @@ const QUERY_BUILDERS: Record<string, QueryBuilder> = {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const year  = parseInt(searchParams.get("year")  || String(new Date().getFullYear()));
+  const year = parseInt(searchParams.get("year") || String(new Date().getFullYear()));
   const month = parseInt(searchParams.get("month") || String(new Date().getMonth() + 1));
+  const rawPeriod = searchParams.get("period") || "mes";
+  const period: Period = rawPeriod === "ytd" || rawPeriod === "ltm" ? rawPeriod : "mes";
 
   const results: Record<string, Record<string, number | null | string>> = {};
 
   await Promise.all(
     Object.entries(QUERY_BUILDERS).map(async ([pais, buildQuery]) => {
       try {
-        const { sql, params } = buildQuery(year, month);
+        const { sql, params } = buildQuery(year, month, period);
         const rows = await query(sql, params);
         const row = rows[0] ?? {};
         results[pais] = {
-          num_tiendas:       Number(row.num_tiendas)       || 0,
+          num_tiendas: Number(row.num_tiendas) || 0,
           facturacion_total: Number(row.facturacion_total) || 0,
-          costo_ventas:      row.costo_ventas  != null ? Number(row.costo_ventas)  : null,
-          utilidad_bruta:    row.utilidad_bruta != null ? Number(row.utilidad_bruta) : null,
-          margen_ub:         row.margen_ub      != null ? Number(row.margen_ub)      : null,
-          piezas:            Number(row.piezas)            || 0,
-          ticket_promedio:   Number(row.ticket_promedio)   || 0,
+          costo_ventas: row.costo_ventas != null ? Number(row.costo_ventas) : null,
+          utilidad_bruta: row.utilidad_bruta != null ? Number(row.utilidad_bruta) : null,
+          margen_ub: row.margen_ub != null ? Number(row.margen_ub) : null,
+          piezas: Number(row.piezas) || 0,
+          ticket_promedio: Number(row.ticket_promedio) || 0,
         };
       } catch (err) {
         results[pais] = { error: err instanceof Error ? err.message : "Error" };
@@ -193,6 +201,5 @@ export async function GET(request: Request) {
     })
   );
 
-  return NextResponse.json({ ok: true, year, month, data: results });
+  return NextResponse.json({ ok: true, year, month, period, data: results });
 }
-
