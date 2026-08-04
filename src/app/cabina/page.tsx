@@ -411,6 +411,10 @@ export default function Cabina() {
   const [year,  setYear]  = useState(NOW.getFullYear());
   const [month, setMonth] = useState(NOW.getMonth() + 1);
   const [ptype, setPtype] = useState("mes"); // mes | ytd | ltm
+  const [rhData, setRhData]   = useState<Record<string, Record<string, number | null>> | null>(null);
+  const [rhMes,  setRhMes]    = useState<string>("");
+  const [audData, setAudData] = useState<Record<string, Record<string, number | null>> | null>(null);
+  const [audMes,  setAudMes]  = useState<string>("");
   const [selPaises, setSelPaises] = useState<string[]>([...PAISES]);
   const paisesVis = PAISES.filter((p) => selPaises.includes(p));
   const togglePais = (p: string) => {
@@ -519,6 +523,22 @@ export default function Cabina() {
     if (area === "logistica") loadLogistica();
   }, [area, loadLogistica]);
 
+  useEffect(() => {
+    if (area !== "rrhh") return;
+    fetch(`/api/rh?year=${year}&month=${month}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.ok) { setRhData(d.data); setRhMes(d.periodoUsado || ""); } })
+      .catch(() => {});
+  }, [area, year, month]);
+
+  useEffect(() => {
+    if (area !== "auditoria") return;
+    fetch(`/api/auditoria?year=${year}&month=${month}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.ok) { setAudData(d.data); setAudMes(d.periodoUsado || ""); } })
+      .catch(() => {});
+  }, [area, year, month]);
+
   async function preguntarIA() {
     if (!pregunta.trim()) return;
     setIaLoading(true);
@@ -545,6 +565,23 @@ export default function Cabina() {
     ub:          paisesVis.reduce((s, p) => s + (data[p]?.utilidad_bruta || 0), 0),
     piezas:      paisesVis.reduce((s, p) => s + (data[p]?.piezas || 0), 0),
   } : null;
+
+  const rhVal = (pais: string, field: string, mode?: string): string => {
+    const r = rhData?.[pais]; if (!r) return "—";
+    const raw = r[field]; if (raw == null) return "—";
+    const v = Number(raw); if (Number.isNaN(v)) return "—";
+    if (mode === "pct") return fmtPct(v * 100);
+    if (mode === "money") return fmtMoney(v);
+    if (mode === "dec") return v.toFixed(1);
+    return fmtNum(v);
+  };
+  const audVal = (pais: string, field: string, mode?: string): string => {
+    const r = audData?.[pais]; if (!r) return "—";
+    const raw = r[field]; if (raw == null) return "—";
+    const v = Number(raw); if (Number.isNaN(v)) return "—";
+    if (mode === "pct") return fmtPct(v * 100);
+    return fmtNum(v);
+  };
 
   const periodo =
     ptype === "ytd" ? `YTD ${MESES[month - 1]} ${year}` :
@@ -1016,7 +1053,7 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "rrhh" && (
             <>
-              <AreaHeader title={periodo} sub="Headcount, rotación y cobertura por país" badge={<BadgePending />} />
+              <AreaHeader title={periodo} sub={rhData ? `MX y CO · datos a ${rhMes}` : "Headcount, rotación y cobertura por país"} badge={rhData ? undefined : <BadgePending />} />
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 16 }}>
                 <KpiCard label="Prom. empleados/tienda"    value="—" sub="KPI-RH-017" pending />
                 <KpiCard label="Rotación gral. tiendas"    value="—" sub="KPI-RH-013" pending />
@@ -1065,27 +1102,27 @@ export default function Cabina() {
               <TableLegend />
               {/* KPI Tables — RRHH */}
               <KpiGroupTable paises={paisesVis} title="Headcount y Rotación — Tiendas" cols={[
-                { id: "KPI-RH-011", label: "Bajas Mes",          getVal: _ => "—" },
-                { id: "KPI-RH-012", label: "Activos Prom.",      getVal: _ => "—" },
-                { id: "KPI-RH-013", label: "Rotación Gral.",     getVal: _ => "—" },
-                { id: "KPI-RH-017", label: "Prom. Emp/Tienda",   getVal: _ => "—" },
-                { id: "KPI-RH-025", label: "% Cob. Plantilla",   getVal: _ => "—" },
+                { id: "KPI-RH-011", label: "Bajas Mes",          getVal: p => rhVal(p, "numero_de_bajas_del_mes_en_general_tiendas") },
+                { id: "KPI-RH-012", label: "Activos Prom.",      getVal: p => rhVal(p, "numero_promedio_de_activos_en_general_tiendas_del_mes") },
+                { id: "KPI-RH-013", label: "Rotación Gral.",     getVal: p => rhVal(p, "rotacion_general_tiendas", "pct") },
+                { id: "KPI-RH-017", label: "Prom. Emp/Tienda",   getVal: p => rhVal(p, "promedio_empleados_x_tienda", "dec") },
+                { id: "KPI-RH-025", label: "% Cob. Plantilla",   getVal: p => rhVal(p, "pct_cobertura_plantilla_en_tienda", "pct") },
               ]} />
               <KpiGroupTable paises={paisesVis} title="Compensación Variable — Tiendas" cols={[
-                { id: "KPI-RH-027", label: "Alcance Promotor",    getVal: _ => "—" },
-                { id: "KPI-RH-029", label: "% Comp. Var. Prom.",  getVal: _ => "—" },
-                { id: "KPI-RH-030", label: "Alcance Subgerente",  getVal: _ => "—" },
-                { id: "KPI-RH-032", label: "% Comp. Var. Subg.",  getVal: _ => "—" },
-                { id: "KPI-RH-033", label: "Alcance Gerente",     getVal: _ => "—" },
-                { id: "KPI-RH-035", label: "% Comp. Var. Gte.",   getVal: _ => "—" },
+                { id: "KPI-RH-027", label: "Alcance Promotor",    getVal: p => rhVal(p, "alcance_de_comision_real_mensual_promotor", "money") },
+                { id: "KPI-RH-029", label: "% Comp. Var. Prom.",  getVal: p => rhVal(p, "pct_alcance_de_compensacion_variable_promotores", "pct") },
+                { id: "KPI-RH-030", label: "Alcance Subgerente",  getVal: p => rhVal(p, "alcance_de_comision_real_mensual_subgerente", "money") },
+                { id: "KPI-RH-032", label: "% Comp. Var. Subg.",  getVal: p => rhVal(p, "pct_alcance_de_compensacion_variable_subgerentes", "pct") },
+                { id: "KPI-RH-033", label: "Alcance Gerente",     getVal: p => rhVal(p, "alcance_de_comision_real_mensual_gerente", "money") },
+                { id: "KPI-RH-035", label: "% Comp. Var. Gte.",   getVal: p => rhVal(p, "pct_alcance_de_compensacion_variable_gerentes", "pct") },
               ]} />
               <KpiGroupTable paises={paisesVis} title="Headcount — Corporativo y Almacén" cols={[
-                { id: "KPI-RH-002", label: "Bajas Corp.",       getVal: _ => "—" },
-                { id: "KPI-RH-003", label: "Activos Corp.",     getVal: _ => "—" },
-                { id: "KPI-RH-004", label: "Rotación Corp.",    getVal: _ => "—" },
-                { id: "KPI-RH-019", label: "Retención <90d",   getVal: _ => "—" },
-                { id: "KPI-RH-022", label: "Vac. Subgerente",  getVal: _ => "—" },
-                { id: "KPI-RH-023", label: "Vac. Gerente",     getVal: _ => "—" },
+                { id: "KPI-RH-002", label: "Bajas Corp.",       getVal: p => rhVal(p, "numero_de_bajas_del_mes_en_el_corporativo") },
+                { id: "KPI-RH-003", label: "Activos Corp.",     getVal: p => rhVal(p, "numero_promedio_de_activos_en_el_corporativo_al_mes") },
+                { id: "KPI-RH-004", label: "Rotación Corp.",    getVal: p => rhVal(p, "rotacion_corporativo", "pct") },
+                { id: "KPI-RH-019", label: "Retención <90d",   getVal: p => rhVal(p, "retencion_de_personal_tienda_antes_de_90_dias", "pct") },
+                { id: "KPI-RH-022", label: "Vac. Subgerente",  getVal: p => rhVal(p, "numero_de_vacantes_subgerente") },
+                { id: "KPI-RH-023", label: "Vac. Gerente",     getVal: p => rhVal(p, "numero_de_vacantes_gerente") },
               ]} />
             </>
           )}
@@ -1391,17 +1428,17 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "auditoria" && (
             <>
-              <AreaHeader title={periodo} sub="Robo, merma y eventos de seguridad por país" badge={<BadgePending />} />
+              <AreaHeader title={periodo} sub={audData ? `CO · datos a ${audMes}` : "Robo, merma y eventos de seguridad por país"} badge={audData ? undefined : <BadgePending />} />
               {/* KPI Tables — Auditoría */}
               <KpiGroupTable paises={paisesVis} title="Merma y Pérdida" cols={[
-                { id: "KPI-AUD-001", label: "Robo Tiendas",  getVal: _ => "—" },
-                { id: "KPI-AUD-002", label: "Merma Tiendas", getVal: _ => "—" },
-                { id: "KPI-AUD-003", label: "Caducados",     getVal: _ => "—" },
+                { id: "KPI-AUD-001", label: "Robo Tiendas",  getVal: p => audVal(p, "robo_tdas", "pct") },
+                { id: "KPI-AUD-002", label: "Merma Tiendas", getVal: p => audVal(p, "merma_tdas", "pct") },
+                { id: "KPI-AUD-003", label: "Caducados",     getVal: p => audVal(p, "caducados_tdas", "pct") },
               ]} />
               <KpiGroupTable paises={paisesVis} title="Incidencias de Seguridad" cols={[
-                { id: "KPI-AUD-004", label: "Eventos Farderos", getVal: _ => "—" },
-                { id: "KPI-AUD-005", label: "Robo Interno",     getVal: _ => "—" },
-                { id: "KPI-AUD-006", label: "Robo de Camión",   getVal: _ => "—" },
+                { id: "KPI-AUD-004", label: "Eventos Farderos", getVal: p => audVal(p, "eventos_farderos") },
+                { id: "KPI-AUD-005", label: "Robo Interno",     getVal: p => audVal(p, "eventos_robo_interno") },
+                { id: "KPI-AUD-006", label: "Robo de Camión",   getVal: p => audVal(p, "robo_de_camion") },
               ]} />
             </>
           )}
