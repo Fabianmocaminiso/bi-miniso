@@ -411,10 +411,9 @@ export default function Cabina() {
   const [year,  setYear]  = useState(NOW.getFullYear());
   const [month, setMonth] = useState(NOW.getMonth() + 1);
   const [ptype, setPtype] = useState("mes"); // mes | ytd | ltm
-  const [rhData, setRhData]   = useState<Record<string, Record<string, number | null>> | null>(null);
-  const [rhMes,  setRhMes]    = useState<string>("");
-  const [audData, setAudData] = useState<Record<string, Record<string, number | null>> | null>(null);
-  const [audMes,  setAudMes]  = useState<string>("");
+  type MvRow = Record<string, number | string | null>;
+  const [mvData, setMvData] = useState<Record<string, Record<string, MvRow>>>({});
+  const [mvMes,  setMvMes]  = useState<Record<string, string>>({});
   const [selPaises, setSelPaises] = useState<string[]>([...PAISES]);
   const paisesVis = PAISES.filter((p) => selPaises.includes(p));
   const togglePais = (p: string) => {
@@ -523,19 +522,21 @@ export default function Cabina() {
     if (area === "logistica") loadLogistica();
   }, [area, loadLogistica]);
 
+  // Sprint 12 — carga genérica de la vista materializada del área activa
   useEffect(() => {
-    if (area !== "rrhh") return;
-    fetch(`/api/rh?year=${year}&month=${month}`)
+    const MVAREA: Record<string, string> = {
+      finanzas: "finanzas", operaciones: "operaciones", comercial: "comercial",
+      logistica: "logistica", marketing: "marketing", rrhh: "rh", auditoria: "auditoria",
+    };
+    const mv = MVAREA[area];
+    if (!mv) return;
+    fetch(`/api/mv?area=${mv}&year=${year}&month=${month}`)
       .then((r) => r.json())
-      .then((d) => { if (d.ok) { setRhData(d.data); setRhMes(d.periodoUsado || ""); } })
-      .catch(() => {});
-  }, [area, year, month]);
-
-  useEffect(() => {
-    if (area !== "auditoria") return;
-    fetch(`/api/auditoria?year=${year}&month=${month}`)
-      .then((r) => r.json())
-      .then((d) => { if (d.ok) { setAudData(d.data); setAudMes(d.periodoUsado || ""); } })
+      .then((d) => {
+        if (!d.ok) return;
+        setMvData((prev) => ({ ...prev, [mv]: d.data || {} }));
+        setMvMes((prev) => ({ ...prev, [mv]: d.periodoUsado || "" }));
+      })
       .catch(() => {});
   }, [area, year, month]);
 
@@ -566,22 +567,31 @@ export default function Cabina() {
     piezas:      paisesVis.reduce((s, p) => s + (data[p]?.piezas || 0), 0),
   } : null;
 
-  const rhVal = (pais: string, field: string, mode?: string): string => {
-    const r = rhData?.[pais]; if (!r) return "—";
-    const raw = r[field]; if (raw == null) return "—";
-    const v = Number(raw); if (Number.isNaN(v)) return "—";
-    if (mode === "pct") return fmtPct(v * 100);
+  // Sprint 12 — accessor único para cualquier MV
+  const mv = (mvName: string, pais: string, field: string, mode?: string): string => {
+    const r = mvData[mvName]?.[pais];
+    if (!r) return "—";
+    const raw = r[field];
+    if (raw == null) return "—";
+    if (typeof raw === "string") return raw;
+    const v = Number(raw);
+    if (Number.isNaN(v)) return "—";
+    if (mode === "pct")   return fmtPct(v * 100);
+    if (mode === "pctd")  return fmtPct(v);
     if (mode === "money") return fmtMoney(v);
-    if (mode === "dec") return v.toFixed(1);
+    if (mode === "abs")   return fmtNum(Math.abs(v));
+    if (mode === "dec")   return v.toFixed(1);
+    if (mode === "dec2")  return v.toFixed(2);
     return fmtNum(v);
   };
-  const audVal = (pais: string, field: string, mode?: string): string => {
-    const r = audData?.[pais]; if (!r) return "—";
-    const raw = r[field]; if (raw == null) return "—";
-    const v = Number(raw); if (Number.isNaN(v)) return "—";
-    if (mode === "pct") return fmtPct(v * 100);
-    return fmtNum(v);
-  };
+  const rhVal  = (p: string, f: string, m?: string) => mv("rh", p, f, m);
+  const audVal = (p: string, f: string, m?: string) => mv("auditoria", p, f, m);
+  const finVal = (p: string, f: string, m?: string) => mv("finanzas", p, f, m);
+  const opsVal = (p: string, f: string, m?: string) => mv("operaciones", p, f, m);
+  const comVal = (p: string, f: string, m?: string) => mv("comercial", p, f, m);
+  const logVal = (p: string, f: string, m?: string) => mv("logistica", p, f, m);
+  const mktVal = (p: string, f: string, m?: string) => mv("marketing", p, f, m);
+  const mvHas  = (n: string) => Object.keys(mvData[n] || {}).length > 0;
 
   const periodo =
     ptype === "ytd" ? `YTD ${MESES[month - 1]} ${year}` :
@@ -770,39 +780,62 @@ export default function Cabina() {
               <KpiGroupTable paises={paisesVis} title="Facturación y Volumen" cols={[
                 { id: "KPI-FIN-001", label: "Facturación Total",  getVal: p => fmtMoney(data?.[p]?.facturacion_total ?? null) },
                 { id: "KPI-FIN-003", label: "Total Piezas",       getVal: p => fmtNum(data?.[p]?.piezas ?? null) },
-                { id: "KPI-FIN-002", label: "Facturación MT",     getVal: _ => "—" },
-                { id: "KPI-FIN-004", label: "Piezas MT",          getVal: _ => "—" },
-                { id: "KPI-FIN-005", label: "% Crec. MTs AA",     getVal: _ => "—" },
+                { id: "KPI-FIN-002", label: "Facturación MT",     getVal: p => finVal(p, "facturacion_mt_venta", "money") },
+                { id: "KPI-FIN-004", label: "Piezas MT",          getVal: p => finVal(p, "facturacion_mt_piezas") },
+                { id: "KPI-FIN-005", label: "% Crec. MTs AA",     getVal: p => finVal(p, "pct_crecimiento_mts_vs_anio_anterior", "pct") },
               ]} />
               <KpiGroupTable paises={paisesVis} title="Costo y Rentabilidad" cols={[
                 { id: "KPI-FIN-006", label: "Costo Ventas $",   getVal: p => fmtMoney(data?.[p]?.costo_ventas ?? null) },
                 { id: "KPI-FIN-007", label: "Costo Ventas %",   getVal: p => { const r = data?.[p]; return (r?.costo_ventas && r?.facturacion_total) ? fmtPct(r.costo_ventas / r.facturacion_total * 100) : "—"; } },
                 { id: "KPI-FIN-014", label: "Utilidad Bruta $", getVal: p => fmtMoney(data?.[p]?.utilidad_bruta ?? null) },
                 { id: "KPI-FIN-015", label: "Margen UB %",      getVal: p => fmtPct(data?.[p]?.margen_ub ?? null) },
-                { id: "KPI-FIN-012", label: "Costo Total $",    getVal: _ => "—" },
-                { id: "KPI-FIN-013", label: "Costo Total %",    getVal: _ => "—" },
+                { id: "KPI-FIN-012", label: "Costo Total $",    getVal: p => finVal(p, "costo_total", "money") },
+                { id: "KPI-FIN-013", label: "Costo Total %",    getVal: p => finVal(p, "porc_costo_total", "pct") },
               ]} />
               <KpiGroupTable paises={paisesVis} title="Gastos Operativos" cols={[
-                { id: "KPI-FIN-016", label: "Gastos Op. $",       getVal: _ => "—" },
-                { id: "KPI-FIN-017", label: "Gastos Op. %",       getVal: _ => "—" },
-                { id: "KPI-FIN-018", label: "Gasto Nómina Op. $", getVal: _ => "—" },
-                { id: "KPI-FIN-020", label: "Gastos Ocupación $", getVal: _ => "—" },
-                { id: "KPI-FIN-022", label: "Gasto Distribución", getVal: _ => "—" },
-                { id: "KPI-FIN-023", label: "Total Gastos Op.",   getVal: _ => "—" },
+                { id: "KPI-FIN-016", label: "Gastos Op. $",       getVal: p => finVal(p, "gasto_operativo", "money") },
+                { id: "KPI-FIN-017", label: "Gastos Op. %",       getVal: p => finVal(p, "porc_gasto_operativo", "pct") },
+                { id: "KPI-FIN-018", label: "Gasto Nómina Op. $", getVal: p => finVal(p, "gasto_nomina_operativa", "money") },
+                { id: "KPI-FIN-020", label: "Gastos Ocupación $", getVal: p => finVal(p, "gasto_ocupacion", "money") },
+                { id: "KPI-FIN-022", label: "Gasto Distribución", getVal: p => finVal(p, "gasto_operativo_distribucion", "money") },
+                { id: "KPI-FIN-023", label: "Total Gastos Op.",   getVal: p => finVal(p, "total_gasto_operacion", "money") },
               ]} />
               <KpiGroupTable paises={paisesVis} title="EBITDA y Resultado" cols={[
-                { id: "KPI-FIN-024", label: "EBITDA Tienda $",   getVal: _ => "—" },
-                { id: "KPI-FIN-025", label: "EBITDA Tienda %",   getVal: _ => "—" },
-                { id: "KPI-FIN-028", label: "EBITDA División $",  getVal: _ => "—" },
-                { id: "KPI-FIN-030", label: "EBITDA División %",  getVal: _ => "—" },
-                { id: "KPI-FIN-034", label: "Utilidad Neta $",    getVal: _ => "—" },
-                { id: "KPI-FIN-035", label: "Utilidad Neta %",    getVal: _ => "—" },
+                { id: "KPI-FIN-024", label: "EBITDA Tienda $",   getVal: p => finVal(p, "ebitda_tda", "money") },
+                { id: "KPI-FIN-025", label: "EBITDA Tienda %",   getVal: p => finVal(p, "porc_ebitda_tda", "pct") },
+                { id: "KPI-FIN-028", label: "EBITDA División $",  getVal: p => finVal(p, "ebitda_div", "money") },
+                { id: "KPI-FIN-030", label: "EBITDA División %",  getVal: p => finVal(p, "porc_ebitda_div", "pct") },
+                { id: "KPI-FIN-034", label: "Utilidad Neta $",    getVal: p => finVal(p, "utilidad_neta", "money") },
+                { id: "KPI-FIN-035", label: "Utilidad Neta %",    getVal: p => finVal(p, "porc_utilidad_neta", "pct") },
               ]} />
               <KpiGroupTable paises={paisesVis} title="Venta por Canal" cols={[
-                { id: "KPI-FIN-041", label: "Blind Lab",    getVal: _ => "—" },
-                { id: "KPI-FIN-042", label: "E-commerce",   getVal: _ => "—" },
-                { id: "KPI-FIN-043", label: "Marketplaces", getVal: _ => "—" },
-                { id: "KPI-FIN-044", label: "Coppel",       getVal: _ => "—" },
+                { id: "KPI-FIN-041", label: "Blind Lab",    getVal: p => finVal(p, "venta_blind_lab", "money") },
+                { id: "KPI-FIN-042", label: "E-commerce",   getVal: p => finVal(p, "venta_on_line", "money") },
+                { id: "KPI-FIN-043", label: "Marketplaces", getVal: p => finVal(p, "venta_marketplaces", "money") },
+                { id: "KPI-FIN-044", label: "Coppel",       getVal: p => finVal(p, "venta_coppel", "money") },
+              ]} />
+              <KpiGroupTable paises={paisesVis} title="Costo de Almacén y Nómina" cols={[
+                { id: "KPI-FIN-008", label: "Costo Almacén $",   getVal: p => finVal(p, "costo_almacen", "money") },
+                { id: "KPI-FIN-009", label: "Costo Almacén %",   getVal: p => finVal(p, "porc_costo_almacen", "pct") },
+                { id: "KPI-FIN-010", label: "Nómina Almacén $",  getVal: p => finVal(p, "gasto_nomina_almacen", "money") },
+                { id: "KPI-FIN-011", label: "Nómina Almacén %",  getVal: p => finVal(p, "porc_gasto_nomina_almacen", "pct") },
+                { id: "KPI-FIN-019", label: "Nómina Oper. %",    getVal: p => finVal(p, "porc_gasto_nomina_operativa", "pct") },
+                { id: "KPI-FIN-021", label: "Ocupación %",       getVal: p => finVal(p, "porc_gasto_ocupacion", "pct") },
+              ]} />
+              <KpiGroupTable paises={paisesVis} title="Corporativo y Resultado Final" cols={[
+                { id: "KPI-FIN-026", label: "Gasto Corp. $",     getVal: p => finVal(p, "gasto_corporativo_gestion", "money") },
+                { id: "KPI-FIN-027", label: "Gasto Corp. %",     getVal: p => finVal(p, "porc_gasto_corporativo_gestion", "pct") },
+                { id: "KPI-FIN-029", label: "Otros Gtos/Ingr.",  getVal: p => finVal(p, "otro_gasto_ingreso_corporativo", "money") },
+                { id: "KPI-FIN-031", label: "Gasto Financiero",  getVal: p => finVal(p, "gasto_financiero", "money") },
+                { id: "KPI-FIN-032", label: "D&A",               getVal: p => finVal(p, "da", "money") },
+                { id: "KPI-FIN-033", label: "Impuestos",         getVal: p => finVal(p, "impuestos", "money") },
+              ]} />
+              <KpiGroupTable paises={paisesVis} title="Estructura Financiera" cols={[
+                { id: "KPI-FIN-036", label: "Free Cash Flow",    getVal: p => finVal(p, "free_cash_flow", "money") },
+                { id: "KPI-FIN-037", label: "Tasa (spread)",     getVal: p => finVal(p, "tasa", "pct") },
+                { id: "KPI-FIN-038", label: "Deuda",             getVal: p => finVal(p, "deuda", "money") },
+                { id: "KPI-FIN-039", label: "Apalancamiento",    getVal: p => finVal(p, "apalancamiento_vs_deuda", "dec2") },
+                { id: "KPI-FIN-040", label: "Seguros x Recup.",  getVal: p => finVal(p, "montos_seguros_por_recuperar", "money") },
               ]} />
             </>
           )}
@@ -917,17 +950,24 @@ export default function Cabina() {
               ]} />
               <KpiGroupTable paises={paisesVis} title="Calidad de Operación" cols={[
                 { id: "KPI-OPS-004", label: "Conversión",        getVal: p => p === "MX" && opsData?.data?.MX?.conversion_pct != null ? fmtPct(opsData.data.MX.conversion_pct) : "—" },
-                { id: "KPI-OPS-001", label: "Cumpl. Presupuesto", getVal: _ => "—" },
-                { id: "KPI-OPS-007", label: "SKUs sin exhibir",  getVal: _ => "—" },
-                { id: "KPI-OPS-008", label: "36hrs entregas",    getVal: _ => "—" },
-                { id: "KPI-OPS-010", label: "Calif. Trade",      getVal: _ => "—" },
-                { id: "KPI-OPS-019", label: "Calif. Checklist",  getVal: _ => "—" },
+                { id: "KPI-OPS-001", label: "Cumpl. Presupuesto", getVal: p => opsVal(p, "cumplimiento_presupuesto", "pct") },
+                { id: "KPI-OPS-007", label: "SKUs sin exhibir",  getVal: p => opsVal(p, "skus_sin_exhibir", "pct") },
+                { id: "KPI-OPS-008", label: "36hrs entregas",    getVal: p => opsVal(p, "36_hrs", "pct") },
+                { id: "KPI-OPS-010", label: "Calif. Trade",      getVal: p => opsVal(p, "calificacion_trade_tiendas", "dec2") },
+                { id: "KPI-OPS-019", label: "Calif. Checklist",  getVal: p => opsVal(p, "calificacion_de_checklist", "dec2") },
               ]} />
               <KpiGroupTable paises={paisesVis} title="Cumplimiento Presupuestal" cols={[
-                { id: "KPI-OPS-011", label: "% Comisiones",     getVal: _ => "—" },
-                { id: "KPI-OPS-012", label: "% Tiendas c/Bono", getVal: _ => "—" },
-                { id: "KPI-OPS-015", label: "% Faltante Inv.",  getVal: _ => "—" },
-                { id: "KPI-OPS-016", label: "% Ajustes",        getVal: _ => "—" },
+                { id: "KPI-OPS-011", label: "% Comisiones",     getVal: p => opsVal(p, "pct_de_comisiones", "pct") },
+                { id: "KPI-OPS-012", label: "% Tiendas c/Bono", getVal: p => opsVal(p, "pct_de_tiendas_cobraron_bono_mas_del_50pct", "pct") },
+                { id: "KPI-OPS-015", label: "% Faltante Inv.",  getVal: p => opsVal(p, "pct_faltante_inventarios", "pct") },
+                { id: "KPI-OPS-016", label: "% Ajustes",        getVal: p => opsVal(p, "porc_ajustes", "pct") },
+              ]} />
+              <KpiGroupTable paises={paisesVis} title="Servicio, Regiones y Mesa de Control" cols={[
+                { id: "KPI-OPS-009", label: "Venta Adicional",   getVal: p => opsVal(p, "venta_adicional", "dec2") },
+                { id: "KPI-OPS-013", label: "Mejor Región",      getVal: p => opsVal(p, "mejor_region_vs_presupuesto") },
+                { id: "KPI-OPS-014", label: "Peor Región",       getVal: p => opsVal(p, "peor_region_vs_presupuesto") },
+                { id: "KPI-OPS-017", label: "On Time Entregas",  getVal: p => opsVal(p, "on_time_de_entregas_almacen_a_tiendas", "pct") },
+                { id: "KPI-OPS-018", label: "Tickets Mesa Ctrl", getVal: p => opsVal(p, "tickets_mesa_de_control") },
               ]} />
             </>
           )}
@@ -1028,7 +1068,7 @@ export default function Cabina() {
               {/* KPI Tables — Comercial */}
               <KpiGroupTable paises={paisesVis} title="Sell-Through e Inventario" cols={[
                 { id: "KPI-COM-005", label: "Sell Thru",           getVal: p => p === "MX" ? fmtPct(comData?.MX?.sell_thru ?? null) : "—" },
-                { id: "KPI-COM-006", label: "Sell Thru AA",        getVal: _ => "—" },
+                { id: "KPI-COM-006", label: "Sell Thru AA",        getVal: p => comVal(p, "sell_thru_general_ano_anterior", "pct") },
                 { id: "KPI-COM-012", label: "Stock/Tienda (pzas)", getVal: p => p === "MX" ? fmtNum(comData?.MX?.stock_tienda_pzas ?? null) : "—" },
                 { id: "KPI-COM-013", label: "Stock/Tienda ($)",    getVal: p => p === "MX" ? fmtMoney(comData?.MX?.stock_tienda_valor ?? null) : "—" },
                 { id: "KPI-COM-001", label: "Precio Promedio",     getVal: p => p === "MX" ? fmtMoney(comData?.MX?.precio_promedio ?? null) : "—" },
@@ -1036,14 +1076,14 @@ export default function Cabina() {
               <KpiGroupTable paises={paisesVis} title="SKUs Activos" cols={[
                 { id: "KPI-COM-008", label: "SKUs Prom/Tienda",     getVal: p => p === "MX" ? fmtNum(comData?.MX?.skus_tiendas ?? null) : "—" },
                 { id: "KPI-COM-009", label: "SKUs en CEDIS",        getVal: p => p === "MX" ? fmtNum(comData?.MX?.skus_almacen ?? null) : "—" },
-                { id: "KPI-COM-010", label: "SKUs <3 pzas CEDIS",   getVal: _ => "—" },
-                { id: "KPI-COM-011", label: "SKUs <3 pzas Tiendas", getVal: _ => "—" },
+                { id: "KPI-COM-010", label: "SKUs <3 pzas CEDIS",   getVal: p => comVal(p, "sku_menos_de_3_piezas_en_cedis") },
+                { id: "KPI-COM-011", label: "SKUs <3 pzas Tiendas", getVal: p => comVal(p, "skus_menos_de_3_piezas_en_tiendas") },
               ]} />
               <KpiGroupTable paises={paisesVis} title="Rebajas y Canal" cols={[
-                { id: "KPI-COM-002", label: "Stock Rebajas %",  getVal: _ => "—" },
-                { id: "KPI-COM-003", label: "Piezas Rebajas %", getVal: _ => "—" },
-                { id: "KPI-COM-004", label: "Venta Rebajas %",  getVal: _ => "—" },
-                { id: "KPI-COM-007", label: "% Vta Prod. Nac.", getVal: _ => "—" },
+                { id: "KPI-COM-002", label: "Stock Rebajas %",  getVal: p => comVal(p, "stock_rebajas_pct_descuentos", "pct") },
+                { id: "KPI-COM-003", label: "Piezas Rebajas %", getVal: p => comVal(p, "piezas_rebajas_pct_descuentos", "pct") },
+                { id: "KPI-COM-004", label: "Venta Rebajas %",  getVal: p => comVal(p, "venta_rebajas_pct_descuentos", "pct") },
+                { id: "KPI-COM-007", label: "% Vta Prod. Nac.", getVal: p => comVal(p, "pct_de_venta_produccion_nacional", "pct") },
               ]} />
             </>
           )}
@@ -1053,53 +1093,8 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "rrhh" && (
             <>
-              <AreaHeader title={periodo} sub={rhData ? `MX y CO · datos a ${rhMes}` : "Headcount, rotación y cobertura por país"} badge={rhData ? undefined : <BadgePending />} />
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 16 }}>
-                <KpiCard label="Prom. empleados/tienda"    value="—" sub="KPI-RH-017" pending />
-                <KpiCard label="Rotación gral. tiendas"    value="—" sub="KPI-RH-013" pending />
-                <KpiCard label="% Cob. plantilla tienda"   value="—" sub="KPI-RH-025" pending />
-                <KpiCard label="Vacantes gerentes"         value="—" sub="KPI-RH-023" pending />
-              </div>
-              <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
-                  <thead>
-                    <tr style={{ background: "var(--bg-2)" }}>
-                      <Th left width={72}>País</Th>
-                      <ThKpi id="KPI-RH-017">Emp/Tienda</ThKpi>
-                      <ThKpi id="KPI-RH-013">Rotación Gral</ThKpi>
-                      <ThKpi id="KPI-RH-016">Rotación Gtes</ThKpi>
-                      <ThKpi id="KPI-RH-025">% Cob. Plantilla</ThKpi>
-                      <ThKpi id="KPI-RH-022">Vac. Subgte</ThKpi>
-                      <ThKpi id="KPI-RH-023">Vac. Gerente</ThKpi>
-                      <ThKpi id="KPI-RH-029">% Alc. Comp. Var.</ThKpi>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paisesVis.map((pais, i) => (
-                      <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
-                        <td style={{ padding: "10px 12px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{pais}</span>
-                            <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span><span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 4 }}>{MONEDA[pais]}</span>
-                          </div>
-                        </td>
-                        {Array.from({ length: 7 }).map((_, j) => (
-                          <td key={j} style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ background: "var(--bg-3)", borderTop: "0.5px solid var(--border-2)" }}>
-                      <td style={{ padding: "8px 12px", color: "var(--text-4)", fontSize: 10, letterSpacing: "0.08em" }}>LATAM</td>
-                      {Array.from({ length: 7 }).map((_, j) => (
-                        <td key={j} style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                      ))}
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-              <TableLegend />
+              <AreaHeader title={periodo} sub={mvHas("rh") ? `MX y CO · datos a ${mvMes["rh"] || ""}` : "Headcount, rotación y cobertura por país"} badge={mvHas("rh") ? undefined : <BadgePending />} />
+              
               {/* KPI Tables — RRHH */}
               <KpiGroupTable paises={paisesVis} title="Headcount y Rotación — Tiendas" cols={[
                 { id: "KPI-RH-011", label: "Bajas Mes",          getVal: p => rhVal(p, "numero_de_bajas_del_mes_en_general_tiendas") },
@@ -1123,6 +1118,21 @@ export default function Cabina() {
                 { id: "KPI-RH-019", label: "Retención <90d",   getVal: p => rhVal(p, "retencion_de_personal_tienda_antes_de_90_dias", "pct") },
                 { id: "KPI-RH-022", label: "Vac. Subgerente",  getVal: p => rhVal(p, "numero_de_vacantes_subgerente") },
                 { id: "KPI-RH-023", label: "Vac. Gerente",     getVal: p => rhVal(p, "numero_de_vacantes_gerente") },
+              ]} />
+              <KpiGroupTable paises={paisesVis} title="Almacén — Operativo y Maquila" cols={[
+                { id: "KPI-RH-005", label: "Bajas Operativo",   getVal: p => rhVal(p, "numero_de_bajas_del_mes_en_la_parte_operativa_del_almacen") },
+                { id: "KPI-RH-007", label: "Rotación Operativo", getVal: p => rhVal(p, "rotacion_operativa_almacen", "pct") },
+                { id: "KPI-RH-008", label: "Bajas Maquila",     getVal: p => rhVal(p, "numero_de_bajas_del_mes_en_la_parte_maquila_del_almacen") },
+                { id: "KPI-RH-010", label: "Rotación Maquila",  getVal: p => rhVal(p, "rotacion_maquila_almacen", "pct") },
+                { id: "KPI-RH-026", label: "% Cob. Almacén",    getVal: p => rhVal(p, "pct_cobertura_plantilla_en_almacen", "pct") },
+              ]} />
+              <KpiGroupTable paises={paisesVis} title="Gerentes, Contratación y Satisfacción" cols={[
+                { id: "KPI-RH-014", label: "Bajas Gerentes",    getVal: p => rhVal(p, "numero_de_bajas_del_mes_en_gerente_tiendas") },
+                { id: "KPI-RH-016", label: "Rotación Gerentes", getVal: p => rhVal(p, "rotacion_gerentes_tiendas", "pct") },
+                { id: "KPI-RH-024", label: "% Cob. Interna Gtes", getVal: p => rhVal(p, "pct_cobertura_interna_gerenciales", "pct") },
+                { id: "KPI-RH-020", label: "Días Contrat. Gcial", getVal: p => rhVal(p, "tiempo_promedio_contratacion_tiendas_gerenciales", "dec") },
+                { id: "KPI-RH-021", label: "Días Contrat. Prom.", getVal: p => rhVal(p, "tiempo_promedio_contratacion_tiendas_promotores", "dec") },
+                { id: "KPI-RH-001", label: "Satisfacción Cía.",  getVal: p => rhVal(p, "calificacion_satisfaccion_compania", "dec2") },
               ]} />
             </>
           )}
@@ -1284,24 +1294,42 @@ export default function Cabina() {
                 { id: "KPI-LOG-003", label: "Fill Rate %",         getVal: p => p === "MX" ? fmtPct(logData?.MX?.fill_rate_pct ?? null) : "—" },
                 { id: "KPI-LOG-001", label: "CEDIS Disp. (pzas)",  getVal: p => p === "MX" ? fmtNum(logData?.MX?.cedis_lf_pzas ?? null) : "—" },
                 { id: "KPI-LOG-022", label: "CEDIS Disp. (sem.)",  getVal: p => p === "MX" && logData?.MX?.cedis_meses != null ? `${logData.MX.cedis_meses} sem` : "—" },
-                { id: "KPI-LOG-005", label: "Total pzas surtidas", getVal: _ => "—" },
-                { id: "KPI-LOG-004", label: "OTP15",               getVal: _ => "—" },
+                { id: "KPI-LOG-005", label: "Total pzas surtidas", getVal: p => logVal(p, "total_piezas_surtidas_a_tiendas") },
+                { id: "KPI-LOG-004", label: "OTP15",               getVal: p => logVal(p, "otp15", "pct") },
                 { id: "KPI-LOG-034", label: "Nivel serv. CEDIS",   getVal: _ => "—" },
               ]} />
               <KpiGroupTable paises={paisesVis} title="Inventario Total" cols={[
-                { id: "KPI-LOG-013", label: "Total inv. (pzas)",      getVal: _ => "—" },
-                { id: "KPI-LOG-014", label: "Inv. tiendas (pzas)",    getVal: _ => "—" },
-                { id: "KPI-LOG-015", label: "Inv. tránsito tiendas",  getVal: _ => "—" },
-                { id: "KPI-LOG-019", label: "Total inv. (meses)",     getVal: _ => "—" },
-                { id: "KPI-LOG-020", label: "Inv. tiendas (meses)",   getVal: _ => "—" },
+                { id: "KPI-LOG-013", label: "Total inv. (pzas)",      getVal: p => logVal(p, "inv_disponible_sap") },
+                { id: "KPI-LOG-014", label: "Inv. tiendas (pzas)",    getVal: p => logVal(p, "inv_tdas") },
+                { id: "KPI-LOG-015", label: "Inv. tránsito tiendas",  getVal: p => logVal(p, "inv_transito_tdas") },
+                { id: "KPI-LOG-019", label: "Total inv. (meses)",     getVal: p => logVal(p, "total_inventario_meses", "dec2") },
+                { id: "KPI-LOG-020", label: "Inv. tiendas (meses)",   getVal: p => logVal(p, "inventario_tiendas_meses", "dec2") },
                 { id: "KPI-LOG-028", label: "OTB (Open To Buy)",      getVal: _ => "—" },
               ]} />
               <KpiGroupTable paises={paisesVis} title="Costos de Distribución" cols={[
-                { id: "KPI-LOG-002", label: "Gasto dist./venta %",  getVal: _ => "—" },
-                { id: "KPI-LOG-007", label: "Costo/pza etiquetado", getVal: _ => "—" },
-                { id: "KPI-LOG-008", label: "Costo/pza almacenada", getVal: _ => "—" },
-                { id: "KPI-LOG-009", label: "Costo/pza surtida",    getVal: _ => "—" },
-                { id: "KPI-LOG-010", label: "Costo/pza distribución",getVal: _ => "—" },
+                { id: "KPI-LOG-002", label: "Gasto dist./venta %",  getVal: p => logVal(p, "pct_de_gasto_distribucion_vs_la_venta_distribucion", "pct") },
+                { id: "KPI-LOG-007", label: "Costo/pza etiquetado", getVal: p => logVal(p, "costo_por_pieza_etiquetado", "dec2") },
+                { id: "KPI-LOG-008", label: "Costo/pza almacenada", getVal: p => logVal(p, "costo_por_pieza_almacenada", "dec2") },
+                { id: "KPI-LOG-009", label: "Costo/pza surtida",    getVal: p => logVal(p, "costo_por_pieza_surtida", "dec2") },
+                { id: "KPI-LOG-010", label: "Costo/pza distribución",getVal: p => logVal(p, "costo_por_pieza_distribucion", "dec2") },
+              ]} />
+              <KpiGroupTable paises={paisesVis} title="Inventario en Piezas — Cadena Completa" cols={[
+                { id: "KPI-LOG-012", label: "En China",          getVal: p => logVal(p, "inventario_en_china_piezas") },
+                { id: "KPI-LOG-016", label: "No Disp. Aduana",   getVal: p => logVal(p, "inventario_no_disponible_en_aduana_piezas") },
+                { id: "KPI-LOG-017", label: "En Tránsito",       getVal: p => logVal(p, "inventario_en_transito_piezas") },
+                { id: "KPI-LOG-018", label: "No Disp. País",     getVal: p => logVal(p, "inventario_no_disponible_pais_piezas") },
+                { id: "KPI-LOG-011", label: "% Carga CEDIS",     getVal: p => logVal(p, "porc_carga_cedis", "pctd") },
+              ]} />
+              <KpiGroupTable paises={paisesVis} title="Cobertura en Meses" cols={[
+                { id: "KPI-LOG-021", label: "Tránsito Tdas",     getVal: p => logVal(p, "inventario_transito_tiendas_meses", "dec2") },
+                { id: "KPI-LOG-023", label: "Aduana",            getVal: p => logVal(p, "inventario_no_disponible_en_aduana_meses", "dec2") },
+                { id: "KPI-LOG-024", label: "Tránsito China",    getVal: p => logVal(p, "inventario_en_transito_meses", "dec2") },
+                { id: "KPI-LOG-025", label: "Pend. Zarpar",      getVal: p => logVal(p, "inventario_liberado_pendiente_de_zarpar_meses", "dec2") },
+                { id: "KPI-LOG-026", label: "No Disp. País",     getVal: p => logVal(p, "inventario_no_disponible_pais_meses", "dec2") },
+                { id: "KPI-LOG-027", label: "En China",          getVal: p => logVal(p, "inventario_en_china_meses", "dec2") },
+              ]} />
+              <KpiGroupTable paises={paisesVis} title="Productividad y Almacenaje" cols={[
+                { id: "KPI-LOG-006", label: "Prom. Almacenaje/sem", getVal: p => logVal(p, "promedio_almacenaje_por_semana") },
               ]} />
             </>
           )}
@@ -1414,11 +1442,18 @@ export default function Cabina() {
                 { id: "KPI-MKT-011", label: "% Redención/Venta",    getVal: p => { if (p !== "MX" || !mktData || !data?.MX?.facturacion_total) return "—"; return fmtPct(mktData.puntos.monto_redimidos_total / data.MX.facturacion_total * 100); } },
               ]} />
               <KpiGroupTable paises={paisesVis} title="Tráfico y Retención" cols={[
-                { id: "KPI-MKT-001", label: "Visitas Tiendas",      getVal: _ => "—" },
-                { id: "KPI-MKT-012", label: "Frec. Compra Loyalty", getVal: _ => "—" },
-                { id: "KPI-MKT-014", label: "% Part. Tickets",      getVal: _ => "—" },
-                { id: "KPI-MKT-018", label: "Clientes +1 compra",   getVal: _ => "—" },
-                { id: "KPI-MKT-019", label: "Clientes +2 compras",  getVal: _ => "—" },
+                { id: "KPI-MKT-001", label: "Visitas Tiendas",      getVal: p => mktVal(p, "visitas_tdas") },
+                { id: "KPI-MKT-012", label: "Frec. Compra Loyalty", getVal: p => mktVal(p, "frecuencia_de_compra_de_los_clientes_top_loyalty", "dec2") },
+                { id: "KPI-MKT-014", label: "% Part. Tickets",      getVal: p => mktVal(p, "pct_participacion_tickets_minisolove", "pct") },
+                { id: "KPI-MKT-018", label: "Clientes +1 compra",   getVal: p => mktVal(p, "clientes_con_mas_de_1_compra_en_180_dias") },
+                { id: "KPI-MKT-019", label: "Clientes +2 compras",  getVal: p => mktVal(p, "clientes_con_mas_de_2_compras_en_180_dias") },
+              ]} />
+              <KpiGroupTable paises={paisesVis} title="Tráfico y Sensores" cols={[
+                { id: "KPI-MKT-002", label: "Sensores Actual",   getVal: p => mktVal(p, "sensores_tdas_actual") },
+                { id: "KPI-MKT-003", label: "Sensores Pasado",   getVal: p => mktVal(p, "sensores_tdas_pasado") },
+                { id: "KPI-MKT-004", label: "% Aumento Tráfico", getVal: p => mktVal(p, "porc_aumento_trafico", "pct") },
+                { id: "KPI-MKT-010", label: "Ventas Tot. Mkt",   getVal: p => mktVal(p, "ventas_total_marketing", "money") },
+                { id: "KPI-MKT-017", label: "Top POS del Mes",   getVal: p => mktVal(p, "top_de_pos_mes_correspondiente") },
               ]} />
             </>
           )}
@@ -1428,7 +1463,7 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "auditoria" && (
             <>
-              <AreaHeader title={periodo} sub={audData ? `CO · datos a ${audMes}` : "Robo, merma y eventos de seguridad por país"} badge={audData ? undefined : <BadgePending />} />
+              <AreaHeader title={periodo} sub={mvHas("auditoria") ? `CO · datos a ${mvMes["auditoria"] || ""}` : "Robo, merma y eventos de seguridad por país"} badge={mvHas("auditoria") ? undefined : <BadgePending />} />
               {/* KPI Tables — Auditoría */}
               <KpiGroupTable paises={paisesVis} title="Merma y Pérdida" cols={[
                 { id: "KPI-AUD-001", label: "Robo Tiendas",  getVal: p => audVal(p, "robo_tdas", "pct") },
