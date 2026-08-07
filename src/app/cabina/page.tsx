@@ -731,39 +731,31 @@ export default function Cabina() {
                 const pctOf = (n: number | null, base: number | null) =>
                   (n == null || !base) ? "—" : fmtPct(n / base * 100);
                 const rows: PnLRow[] = [
-                  { kind: "sub",  label: "Facturación Total",         id: "KPI-FIN-001", get: p => money(V(p).venta) },
-                  { kind: "item", label: "Costo de ventas",           id: "KPI-FIN-006", get: p => neg(V(p).cv) },
-                  { kind: "pct",  label: "% sobre facturación",       id: "KPI-FIN-007", get: p => { const v = V(p); return pctOf(v.cv, v.venta); } },
-                  { kind: "item", label: "Costo de almacén",          id: "KPI-FIN-008", get: p => neg(V(p).ca) },
-                  { kind: "item", label: "Nómina de almacén",         id: "KPI-FIN-010", get: p => neg(V(p).nomAlm) },
-                  { kind: "item", label: "Costo total",               id: "KPI-FIN-012", get: p => neg(V(p).ct) },
-                  { kind: "pct",  label: "% sobre facturación",       id: "KPI-FIN-013", get: p => { const v = V(p); return pctOf(v.ct, v.venta); } },
-                  { kind: "sub",  label: "Utilidad Bruta",            id: "KPI-FIN-014", get: p => money(V(p).ub) },
-                  { kind: "pct",  label: "% margen bruto",            id: "KPI-FIN-015", get: p => { const v = V(p); return pctOf(v.ub, v.venta); } },
-                  { kind: "item", label: "Nómina operativa",          id: "KPI-FIN-018", get: p => neg(V(p).nomOp) },
-                  { kind: "item", label: "Gastos de ocupación",       id: "KPI-FIN-020", get: p => neg(V(p).ocup) },
-                  { kind: "item", label: "Gasto de distribución",     id: "KPI-FIN-022", get: p => neg(V(p).dist) },
-                  { kind: "item", label: "Otros gastos operativos",   id: "KPI-FIN-016", get: p => neg(V(p).gOp) },
-                  { kind: "item", label: "Total gastos de operación", id: "KPI-FIN-023", get: p => neg(V(p).tgo) },
-                  { kind: "pct",  label: "% sobre facturación",       id: "KPI-FIN-017", get: p => { const v = V(p); return pctOf(v.tgo, v.venta); } },
-                  { kind: "sub",  label: "EBITDA Tienda",             id: "KPI-FIN-024", get: p => money(V(p).eTda) },
-                  { kind: "pct",  label: "% margen EBITDA tienda",    id: "KPI-FIN-025", get: p => { const v = V(p); return pctOf(v.eTda, v.venta); } },
-                  { kind: "item", label: "Gasto corporativo",         id: "KPI-FIN-026", get: p => neg(V(p).gc) },
-                  { kind: "pct",  label: "% sobre facturación",       id: "KPI-FIN-027", get: p => { const v = V(p); return pctOf(v.gc, v.venta); } },
-                  { kind: "item", label: "Otros gastos / ingresos",   id: "KPI-FIN-029", get: p => money(V(p).oc) },
-                  { kind: "sub",  label: "EBITDA División",           id: "KPI-FIN-028", get: p => money(V(p).eDiv) },
-                  { kind: "pct",  label: "% margen EBITDA división",  id: "KPI-FIN-030", get: p => { const v = V(p); return pctOf(v.eDiv, v.venta); } },
-                  { kind: "item", label: "Depreciación y amortización", id: "KPI-FIN-032", get: p => neg(V(p).da) },
-                  { kind: "item", label: "Gasto financiero",          id: "KPI-FIN-031", get: p => neg(V(p).gf) },
-                  { kind: "item", label: "Impuestos",                 id: "KPI-FIN-033", get: p => neg(V(p).imp) },
-                  { kind: "sub",  label: "Utilidad Neta",             id: "KPI-FIN-034", get: p => money(V(p).un) },
-                  { kind: "pct",  label: "% margen neto",             id: "KPI-FIN-035", get: p => { const v = V(p); return pctOf(v.un, v.venta); } },
+                  { kind: "sub",  label: "Facturación Total",           id: "KPI-FIN-001", get: p => money(V(p).venta) },
+                  { kind: "item", label: "Costo de ventas",             id: "KPI-FIN-006", get: p => { const v = V(p); return pctOf(v.cv, v.venta); },   sub: p => neg(V(p).cv) },
+                  { kind: "item", label: "Costo de almacén",            id: "KPI-FIN-008", get: p => { const v = V(p); return pctOf(v.ca, v.venta); },   sub: p => neg(V(p).ca) },
+                  { kind: "item", label: "Nómina de almacén",           id: "KPI-FIN-010", get: p => { const v = V(p); return pctOf(v.nomAlm, v.venta); }, sub: p => neg(V(p).nomAlm) },
+                  { kind: "item", label: "Costo total",                 id: "KPI-FIN-012", get: p => { const v = V(p); return pctOf(v.ct, v.venta); },   sub: p => neg(V(p).ct) },
+                  { kind: "sub",  label: "Utilidad Bruta",              id: "KPI-FIN-014", get: p => { const v = V(p); return pctOf(v.ub, v.venta); },   sub: p => money(V(p).ub) },
+                  { kind: "item", label: "Nómina operativa",            id: "KPI-FIN-018", get: p => { const v = V(p); return pctOf(v.nomOp, v.venta); }, sub: p => neg(V(p).nomOp) },
+                  { kind: "item", label: "Gastos de ocupación",         id: "KPI-FIN-020", get: p => { const v = V(p); return pctOf(v.ocup, v.venta); }, sub: p => neg(V(p).ocup) },
+                  { kind: "item", label: "Gasto de distribución",       id: "KPI-FIN-022", get: p => { const v = V(p); return pctOf(v.dist, v.venta); }, sub: p => neg(V(p).dist) },
+                  { kind: "item", label: "Otros gastos operativos",     id: "KPI-FIN-016", get: p => { const v = V(p); return pctOf(v.gOp, v.venta); },  sub: p => neg(V(p).gOp) },
+                  { kind: "item", label: "Total gastos de operación",   id: "KPI-FIN-023", get: p => { const v = V(p); return pctOf(v.tgo, v.venta); },  sub: p => neg(V(p).tgo) },
+                  { kind: "sub",  label: "EBITDA Tienda",               id: "KPI-FIN-024", get: p => { const v = V(p); return pctOf(v.eTda, v.venta); }, sub: p => money(V(p).eTda) },
+                  { kind: "item", label: "Gasto corporativo",           id: "KPI-FIN-026", get: p => { const v = V(p); return pctOf(v.gc, v.venta); },   sub: p => neg(V(p).gc) },
+                  { kind: "item", label: "Otros gastos / ingresos",     id: "KPI-FIN-029", get: p => { const v = V(p); return pctOf(v.oc, v.venta); },   sub: p => money(V(p).oc) },
+                  { kind: "sub",  label: "EBITDA División",             id: "KPI-FIN-028", get: p => { const v = V(p); return pctOf(v.eDiv, v.venta); }, sub: p => money(V(p).eDiv) },
+                  { kind: "item", label: "Depreciación y amortización", id: "KPI-FIN-032", get: p => { const v = V(p); return pctOf(v.da, v.venta); },   sub: p => neg(V(p).da) },
+                  { kind: "item", label: "Gasto financiero",            id: "KPI-FIN-031", get: p => { const v = V(p); return pctOf(v.gf, v.venta); },   sub: p => neg(V(p).gf) },
+                  { kind: "item", label: "Impuestos",                   id: "KPI-FIN-033", get: p => { const v = V(p); return pctOf(v.imp, v.venta); },  sub: p => neg(V(p).imp) },
+                  { kind: "sub",  label: "Utilidad Neta",               id: "KPI-FIN-034", get: p => { const v = V(p); return pctOf(v.un, v.venta); },   sub: p => money(V(p).un) },
                 ];
                 return (
                   <>
                     <PnLTable paises={pnlPaises} rows={rows} />
                     <div style={{ fontSize: 10, color: "var(--text-4)", marginTop: 6, lineHeight: 1.5 }}>
-                      Los subtotales (Utilidad Bruta, EBITDA Tienda, EBITDA División y Utilidad Neta) se recalculan localmente
+                      Todos los conceptos se expresan como % sobre facturación para permitir comparación entre monedas; el importe en moneda local va debajo en gris. Los subtotales se recalculan localmente
                       sobre el valor absoluto de costos y gastos. El origen los almacena en negativo y los subtotales de la
                       vista quedan sobrestimados. Pendiente de corrección en datos maestros.
                     </div>
@@ -1491,7 +1483,7 @@ export default function Cabina() {
 interface KpiColDef { id: string; label: string; getVal: (pais: string) => string; }
 
 
-type PnLRow = { kind: "sub" | "item" | "pct"; label: string; id?: string; get: (pais: string) => string };
+type PnLRow = { kind: "sub" | "item"; label: string; id?: string; get: (pais: string) => string; sub?: (pais: string) => string };
 
 function PnLTable({ paises, rows }: { paises: readonly string[]; rows: PnLRow[] }) {
   return (
@@ -1512,37 +1504,41 @@ function PnLTable({ paises, rows }: { paises: readonly string[]; rows: PnLRow[] 
         <tbody>
           {rows.map((r, i) => {
             const isSub = r.kind === "sub";
-            const isPct = r.kind === "pct";
             return (
               <tr key={i} style={{
                 background: isSub ? "var(--bg-2)" : "var(--bg-0)",
                 borderTop: isSub ? "0.5px solid var(--border)" : "none",
               }}>
                 <td style={{
-                  padding: isPct ? "0 12px 2px 26px" : "3px 12px",
+                  padding: "4px 12px",
                   paddingLeft: isSub ? 12 : 26,
-                  lineHeight: 1.3,
-                  color: isSub ? "var(--text-1)" : isPct ? "var(--text-4)" : "var(--text-3)",
+                  lineHeight: 1.25,
+                  color: isSub ? "var(--text-1)" : "var(--text-3)",
                   fontWeight: isSub ? 600 : 400,
-                  fontSize: isPct ? 10 : 12,
+                  fontSize: 12,
                 }}>
                   {r.label}
-                  {r.id && !isPct && (
-                    <span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 6, fontWeight: 400 }}>{r.id}</span>
-                  )}
+                  {r.id && <span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 6, fontWeight: 400 }}>{r.id}</span>}
                 </td>
                 {paises.map((p) => {
                   const v = r.get(p);
+                  const sv = r.sub ? r.sub(p) : null;
                   return (
                     <td key={p} style={{
-                      padding: isPct ? "0 12px 2px" : "3px 12px",
-                      lineHeight: 1.3,
+                      padding: "4px 12px",
                       textAlign: "right",
-                      fontWeight: isSub ? 600 : 400,
-                      fontSize: isPct ? 10 : 12,
+                      lineHeight: 1.25,
                       fontVariantNumeric: "tabular-nums",
-                      color: v === "—" ? "var(--text-4)" : isSub ? "var(--text-1)" : isPct ? "var(--text-4)" : "var(--text-2)",
-                    }}>{v}</td>
+                    }}>
+                      <div style={{
+                        fontWeight: isSub ? 600 : 400,
+                        fontSize: 12,
+                        color: v === "—" ? "var(--text-4)" : isSub ? "var(--text-1)" : "var(--text-2)",
+                      }}>{v}</div>
+                      {sv && sv !== "—" && (
+                        <div style={{ fontSize: 9.5, color: "var(--text-4)", marginTop: -1 }}>{sv}</div>
+                      )}
+                    </td>
                   );
                 })}
               </tr>
