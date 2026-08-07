@@ -699,7 +699,7 @@ export default function Cabina() {
               )}
               <AreaHeader title={periodo} sub="Estado de resultados — comparativo por país" loading={loading} />
               {(() => {
-                const pnlPaises = paisesVis.filter((p) => mvData["finanzas"]?.[p]);
+                const pnlPaises = paisesVis;
                 if (pnlPaises.length === 0) {
                   return <div style={{ color: "var(--text-4)", fontSize: 12, padding: "24px 0" }}>Sin datos de P&amp;L para los países seleccionados.</div>;
                 }
@@ -766,9 +766,6 @@ export default function Cabina() {
                       Los subtotales (Utilidad Bruta, EBITDA Tienda, EBITDA División y Utilidad Neta) se recalculan localmente
                       sobre el valor absoluto de costos y gastos. El origen los almacena en negativo y los subtotales de la
                       vista quedan sobrestimados. Pendiente de corrección en datos maestros.
-                      {paisesVis.length > pnlPaises.length && (
-                        <> · {paisesVis.length - pnlPaises.length} país(es) sin P&amp;L en el origen no se muestran.</>
-                      )}
                     </div>
                     <KpiGroupTable paises={pnlPaises} title="Volumen y mismas tiendas" cols={[
                       { id: "KPI-FIN-003", label: "Piezas totales",   getVal: p => finVal(p, "fact_pzas") },
@@ -1498,13 +1495,13 @@ type PnLRow = { kind: "sub" | "item" | "pct"; label: string; id?: string; get: (
 
 function PnLTable({ paises, rows }: { paises: readonly string[]; rows: PnLRow[] }) {
   return (
-    <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
+    <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden", maxWidth: 270 + paises.length * 175 }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
         <thead>
           <tr style={{ background: "var(--bg-2)" }}>
-            <Th left width={260}>Concepto</Th>
+            <Th left width={270}>Concepto</Th>
             {paises.map((p) => (
-              <th key={p} style={{ padding: "7px 12px", textAlign: "right", fontWeight: 500, color: "var(--text-3)", fontSize: 11 }}>
+              <th key={p} style={{ padding: "6px 12px", textAlign: "right", fontWeight: 500, color: "var(--text-3)", fontSize: 11 }}>
                 <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em", marginRight: 5 }}>{p}</span>
                 {NOMBRE[p]}
                 <span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 4 }}>{MONEDA[p]}</span>
@@ -1522,8 +1519,9 @@ function PnLTable({ paises, rows }: { paises: readonly string[]; rows: PnLRow[] 
                 borderTop: isSub ? "0.5px solid var(--border)" : "none",
               }}>
                 <td style={{
-                  padding: isPct ? "2px 12px 4px 30px" : "5px 12px",
-                  paddingLeft: isSub ? 12 : 30,
+                  padding: isPct ? "0 12px 2px 26px" : "3px 12px",
+                  paddingLeft: isSub ? 12 : 26,
+                  lineHeight: 1.3,
                   color: isSub ? "var(--text-1)" : isPct ? "var(--text-4)" : "var(--text-3)",
                   fontWeight: isSub ? 600 : 400,
                   fontSize: isPct ? 10 : 12,
@@ -1537,7 +1535,8 @@ function PnLTable({ paises, rows }: { paises: readonly string[]; rows: PnLRow[] 
                   const v = r.get(p);
                   return (
                     <td key={p} style={{
-                      padding: isPct ? "2px 12px 4px" : "5px 12px",
+                      padding: isPct ? "0 12px 2px" : "3px 12px",
+                      lineHeight: 1.3,
                       textAlign: "right",
                       fontWeight: isSub ? 600 : 400,
                       fontSize: isPct ? 10 : 12,
