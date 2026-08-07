@@ -587,6 +587,7 @@ export default function Cabina() {
   const rhVal  = (p: string, f: string, m?: string) => mv("rh", p, f, m);
   const audVal = (p: string, f: string, m?: string) => mv("auditoria", p, f, m);
   const finVal = (p: string, f: string, m?: string) => mv("finanzas", p, f, m);
+  const finNum = (p: string, f: string): number | null => { const r = mvData["finanzas"]?.[p]; const v = r?.[f]; if (v == null || typeof v === "string") return null; const n = Number(v); return Number.isNaN(n) ? null : n; };
   const opsVal = (p: string, f: string, m?: string) => mv("operaciones", p, f, m);
   const comVal = (p: string, f: string, m?: string) => mv("comercial", p, f, m);
   const logVal = (p: string, f: string, m?: string) => mv("logistica", p, f, m);
@@ -696,147 +697,101 @@ export default function Cabina() {
                   Error al conectar con Redshift: {error}
                 </div>
               )}
-              <AreaHeader title={periodo} sub="Vista comparativa — todos los países" loading={loading} />
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 16 }}>
-                <KpiCard label="Facturación LATAM"  value={totales ? fmtMoney(totales.facturacion) : "—"} loading={loading} kpiId="KPI-FIN-001" />
-                <KpiCard label="Utilidad Bruta"     value={totales ? fmtMoney(totales.ub) : "—"}          loading={loading} kpiId="KPI-FIN-014" />
-                <KpiCard label="Piezas vendidas"    value={totales ? fmtNum(totales.piezas) : "—"}         loading={loading} kpiId="KPI-FIN-003" />
-                <KpiCard label="Tiendas activas"    value={totales ? String(totales.tiendas) : "—"} sub={`${paisesVis.length} ${paisesVis.length === 1 ? "país" : "países"}`} loading={loading} />
-              </div>
-              <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
-                  <thead>
-                    <tr style={{ background: "var(--bg-2)" }}>
-                      <Th left width={72}>País</Th>
-                      <Th>Tiendas</Th>
-                      <Th>Facturación</Th>
-                      <Th>Costo VTA</Th>
-                      <Th>UB $</Th>
-                      <Th>Margen UB</Th>
-                      <Th>Piezas</Th>
-                      <Th>Ticket Prom.</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paisesVis.map((pais, i) => {
-                      const row = data?.[pais] as PaisData | undefined;
-                      const odd = i % 2 === 0;
-                      const rTiendas = data ? getRanks(data, "num_tiendas",      true)  : {};
-                      const rFact    = data ? getRanks(data, "facturacion_total", true)  : {};
-                      const rCosto   = data ? getRanks(data, "costo_ventas",      false) : {};
-                      const rUB      = data ? getRanks(data, "utilidad_bruta",    true)  : {};
-                      const rMargen  = data ? getRanks(data, "margen_ub",         true)  : {};
-                      const rPiezas  = data ? getRanks(data, "piezas",            true)  : {};
-                      const rTicket  = data ? getRanks(data, "ticket_promedio",   true)  : {};
-                      return (
-                        <tr key={pais} style={{ background: odd ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
-                          <td style={{ padding: "10px 12px" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{pais}</span>
-                              <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span><span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 4 }}>{MONEDA[pais]}</span>
-                            </div>
-                          </td>
-                          {loading ? (
-                            Array.from({ length: 7 }).map((_, j) => (
-                              <td key={j} style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                            ))
-                          ) : row?.error ? (
-                            Array.from({ length: 7 }).map((_, j) => (
-                              <td key={j} style={{ padding: "10px 12px", textAlign: "right", color: "var(--rose)", fontSize: 10 }}>err</td>
-                            ))
-                          ) : (
-                            <>
-                              <Td><Cell value={fmtNum(row?.num_tiendas ?? null)}        rank={rTiendas[pais] || "none"} /></Td>
-                              <Td><Cell value={fmtMoney(row?.facturacion_total ?? null)} rank={rFact[pais]   || "none"} /></Td>
-                              <Td><Cell value={fmtMoney(row?.costo_ventas ?? null)}      rank={rCosto[pais]  || "none"} /></Td>
-                              <Td><Cell value={fmtMoney(row?.utilidad_bruta ?? null)}    rank={rUB[pais]     || "none"} /></Td>
-                              <Td><Cell value={fmtPct(row?.margen_ub ?? null)}           rank={rMargen[pais] || "none"} /></Td>
-                              <Td><Cell value={fmtNum(row?.piezas ?? null)}              rank={rPiezas[pais] || "none"} /></Td>
-                              <Td><Cell value={fmtMoney(row?.ticket_promedio ?? null)}   rank={rTicket[pais] || "none"} /></Td>
-                            </>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  {totales && !loading && (
-                    <tfoot>
-                      <tr style={{ background: "var(--bg-3)", borderTop: "0.5px solid var(--border-2)" }}>
-                        <td style={{ padding: "8px 12px", color: "var(--text-4)", fontSize: 10, letterSpacing: "0.08em" }}>LATAM</td>
-                        <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-1)", fontWeight: 500 }}>{fmtNum(totales.tiendas)}</td>
-                        <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-1)", fontWeight: 500 }}>{fmtMoney(totales.facturacion)}</td>
-                        <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                        <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-1)", fontWeight: 500 }}>{fmtMoney(totales.ub)}</td>
-                        <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                        <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-1)", fontWeight: 500 }}>{fmtNum(totales.piezas)}</td>
-                        <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
-              <TableLegend />
-              {/* KPI Tables — Finanzas */}
-              <KpiGroupTable paises={paisesVis} title="Facturación y Volumen" cols={[
-                { id: "KPI-FIN-001", label: "Facturación Total",  getVal: p => fmtMoney(data?.[p]?.facturacion_total ?? null) },
-                { id: "KPI-FIN-003", label: "Total Piezas",       getVal: p => fmtNum(data?.[p]?.piezas ?? null) },
-                { id: "KPI-FIN-002", label: "Facturación MT",     getVal: p => finVal(p, "facturacion_mt_venta", "money") },
-                { id: "KPI-FIN-004", label: "Piezas MT",          getVal: p => finVal(p, "facturacion_mt_piezas") },
-                { id: "KPI-FIN-005", label: "% Crec. MTs AA",     getVal: p => finVal(p, "pct_crecimiento_mts_vs_anio_anterior", "pct") },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Costo y Rentabilidad" cols={[
-                { id: "KPI-FIN-006", label: "Costo Ventas $",   getVal: p => fmtMoney(data?.[p]?.costo_ventas ?? null) },
-                { id: "KPI-FIN-007", label: "Costo Ventas %",   getVal: p => { const r = data?.[p]; return (r?.costo_ventas && r?.facturacion_total) ? fmtPct(r.costo_ventas / r.facturacion_total * 100) : "—"; } },
-                { id: "KPI-FIN-014", label: "Utilidad Bruta $", getVal: p => fmtMoney(data?.[p]?.utilidad_bruta ?? null) },
-                { id: "KPI-FIN-015", label: "Margen UB %",      getVal: p => fmtPct(data?.[p]?.margen_ub ?? null) },
-                { id: "KPI-FIN-012", label: "Costo Total $",    getVal: p => finVal(p, "costo_total", "money") },
-                { id: "KPI-FIN-013", label: "Costo Total %",    getVal: p => finVal(p, "porc_costo_total", "pct") },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Gastos Operativos" cols={[
-                { id: "KPI-FIN-016", label: "Gastos Op. $",       getVal: p => finVal(p, "gasto_operativo", "money") },
-                { id: "KPI-FIN-017", label: "Gastos Op. %",       getVal: p => finVal(p, "porc_gasto_operativo", "pct") },
-                { id: "KPI-FIN-018", label: "Gasto Nómina Op. $", getVal: p => finVal(p, "gasto_nomina_operativa", "money") },
-                { id: "KPI-FIN-020", label: "Gastos Ocupación $", getVal: p => finVal(p, "gasto_ocupacion", "money") },
-                { id: "KPI-FIN-022", label: "Gasto Distribución", getVal: p => finVal(p, "gasto_operativo_distribucion", "money") },
-                { id: "KPI-FIN-023", label: "Total Gastos Op.",   getVal: p => finVal(p, "total_gasto_operacion", "money") },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="EBITDA y Resultado" cols={[
-                { id: "KPI-FIN-024", label: "EBITDA Tienda $",   getVal: p => finVal(p, "ebitda_tda", "money") },
-                { id: "KPI-FIN-025", label: "EBITDA Tienda %",   getVal: p => finVal(p, "porc_ebitda_tda", "pct") },
-                { id: "KPI-FIN-028", label: "EBITDA División $",  getVal: p => finVal(p, "ebitda_div", "money") },
-                { id: "KPI-FIN-030", label: "EBITDA División %",  getVal: p => finVal(p, "porc_ebitda_div", "pct") },
-                { id: "KPI-FIN-034", label: "Utilidad Neta $",    getVal: p => finVal(p, "utilidad_neta", "money") },
-                { id: "KPI-FIN-035", label: "Utilidad Neta %",    getVal: p => finVal(p, "porc_utilidad_neta", "pct") },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Venta por Canal" cols={[
-                { id: "KPI-FIN-041", label: "Blind Lab",    getVal: p => finVal(p, "venta_blind_lab", "money") },
-                { id: "KPI-FIN-042", label: "E-commerce",   getVal: p => finVal(p, "venta_on_line", "money") },
-                { id: "KPI-FIN-043", label: "Marketplaces", getVal: p => finVal(p, "venta_marketplaces", "money") },
-                { id: "KPI-FIN-044", label: "Coppel",       getVal: p => finVal(p, "venta_coppel", "money") },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Costo de Almacén y Nómina" cols={[
-                { id: "KPI-FIN-008", label: "Costo Almacén $",   getVal: p => finVal(p, "costo_almacen", "money") },
-                { id: "KPI-FIN-009", label: "Costo Almacén %",   getVal: p => finVal(p, "porc_costo_almacen", "pct") },
-                { id: "KPI-FIN-010", label: "Nómina Almacén $",  getVal: p => finVal(p, "gasto_nomina_almacen", "money") },
-                { id: "KPI-FIN-011", label: "Nómina Almacén %",  getVal: p => finVal(p, "porc_gasto_nomina_almacen", "pct") },
-                { id: "KPI-FIN-019", label: "Nómina Oper. %",    getVal: p => finVal(p, "porc_gasto_nomina_operativa", "pct") },
-                { id: "KPI-FIN-021", label: "Ocupación %",       getVal: p => finVal(p, "porc_gasto_ocupacion", "pct") },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Corporativo y Resultado Final" cols={[
-                { id: "KPI-FIN-026", label: "Gasto Corp. $",     getVal: p => finVal(p, "gasto_corporativo_gestion", "money") },
-                { id: "KPI-FIN-027", label: "Gasto Corp. %",     getVal: p => finVal(p, "porc_gasto_corporativo_gestion", "pct") },
-                { id: "KPI-FIN-029", label: "Otros Gtos/Ingr.",  getVal: p => finVal(p, "otro_gasto_ingreso_corporativo", "money") },
-                { id: "KPI-FIN-031", label: "Gasto Financiero",  getVal: p => finVal(p, "gasto_financiero", "money") },
-                { id: "KPI-FIN-032", label: "D&A",               getVal: p => finVal(p, "da", "money") },
-                { id: "KPI-FIN-033", label: "Impuestos",         getVal: p => finVal(p, "impuestos", "money") },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Estructura Financiera" cols={[
-                { id: "KPI-FIN-036", label: "Free Cash Flow",    getVal: p => finVal(p, "free_cash_flow", "money") },
-                { id: "KPI-FIN-037", label: "Tasa (spread)",     getVal: p => finVal(p, "tasa", "pct") },
-                { id: "KPI-FIN-038", label: "Deuda",             getVal: p => finVal(p, "deuda", "money") },
-                { id: "KPI-FIN-039", label: "Apalancamiento",    getVal: p => finVal(p, "apalancamiento_vs_deuda", "dec2") },
-                { id: "KPI-FIN-040", label: "Seguros x Recup.",  getVal: p => finVal(p, "montos_seguros_por_recuperar", "money") },
-              ]} />
+              <AreaHeader title={periodo} sub="Estado de resultados — comparativo por país" loading={loading} />
+              {(() => {
+                const pnlPaises = paisesVis.filter((p) => mvData["finanzas"]?.[p]);
+                if (pnlPaises.length === 0) {
+                  return <div style={{ color: "var(--text-4)", fontSize: 12, padding: "24px 0" }}>Sin datos de P&amp;L para los países seleccionados.</div>;
+                }
+                const V = (p: string) => {
+                  const g = (f: string) => finNum(p, f);
+                  const a = (f: string) => { const v = g(f); return v == null ? null : Math.abs(v); };
+                  const venta = g("fact_total");
+                  const cv = a("costo_venta");
+                  const ca = a("costo_almacen");
+                  const ct = a("costo_total") ?? ((cv ?? 0) + (ca ?? 0));
+                  const ub = venta == null ? null : venta - ct;
+                  const nomOp = a("gasto_nomina_operativa");
+                  const ocup = a("gasto_ocupacion");
+                  const dist = a("gasto_operativo_distribucion");
+                  const gOp = a("gasto_operativo");
+                  const tgo = a("total_gasto_operacion") ?? gOp;
+                  const eTda = ub == null ? null : ub - (tgo ?? 0);
+                  const gc = a("gasto_corporativo_gestion");
+                  const oc = g("otro_gasto_ingreso_corporativo");
+                  const eDiv = eTda == null ? null : eTda - (gc ?? 0) + (oc ?? 0);
+                  const da = a("da");
+                  const gf = a("gasto_financiero");
+                  const imp = a("impuestos");
+                  const un = eDiv == null ? null : eDiv - (da ?? 0) - (gf ?? 0) - (imp ?? 0);
+                  return { venta, cv, ca, nomAlm: a("gasto_nomina_almacen"), ct, ub, nomOp, ocup, dist, gOp, tgo, eTda, gc, oc, eDiv, da, gf, imp, un };
+                };
+                const money = (n: number | null) => n == null ? "—" : fmtMoney(n);
+                const neg = (n: number | null) => n == null ? "—" : "(" + fmtMoney(n) + ")";
+                const pctOf = (n: number | null, base: number | null) =>
+                  (n == null || !base) ? "—" : fmtPct(n / base * 100);
+                const rows: PnLRow[] = [
+                  { kind: "sub",  label: "Facturación Total",         id: "KPI-FIN-001", get: p => money(V(p).venta) },
+                  { kind: "item", label: "Costo de ventas",           id: "KPI-FIN-006", get: p => neg(V(p).cv) },
+                  { kind: "pct",  label: "% sobre facturación",       id: "KPI-FIN-007", get: p => { const v = V(p); return pctOf(v.cv, v.venta); } },
+                  { kind: "item", label: "Costo de almacén",          id: "KPI-FIN-008", get: p => neg(V(p).ca) },
+                  { kind: "item", label: "Nómina de almacén",         id: "KPI-FIN-010", get: p => neg(V(p).nomAlm) },
+                  { kind: "item", label: "Costo total",               id: "KPI-FIN-012", get: p => neg(V(p).ct) },
+                  { kind: "pct",  label: "% sobre facturación",       id: "KPI-FIN-013", get: p => { const v = V(p); return pctOf(v.ct, v.venta); } },
+                  { kind: "sub",  label: "Utilidad Bruta",            id: "KPI-FIN-014", get: p => money(V(p).ub) },
+                  { kind: "pct",  label: "% margen bruto",            id: "KPI-FIN-015", get: p => { const v = V(p); return pctOf(v.ub, v.venta); } },
+                  { kind: "item", label: "Nómina operativa",          id: "KPI-FIN-018", get: p => neg(V(p).nomOp) },
+                  { kind: "item", label: "Gastos de ocupación",       id: "KPI-FIN-020", get: p => neg(V(p).ocup) },
+                  { kind: "item", label: "Gasto de distribución",     id: "KPI-FIN-022", get: p => neg(V(p).dist) },
+                  { kind: "item", label: "Otros gastos operativos",   id: "KPI-FIN-016", get: p => neg(V(p).gOp) },
+                  { kind: "item", label: "Total gastos de operación", id: "KPI-FIN-023", get: p => neg(V(p).tgo) },
+                  { kind: "pct",  label: "% sobre facturación",       id: "KPI-FIN-017", get: p => { const v = V(p); return pctOf(v.tgo, v.venta); } },
+                  { kind: "sub",  label: "EBITDA Tienda",             id: "KPI-FIN-024", get: p => money(V(p).eTda) },
+                  { kind: "pct",  label: "% margen EBITDA tienda",    id: "KPI-FIN-025", get: p => { const v = V(p); return pctOf(v.eTda, v.venta); } },
+                  { kind: "item", label: "Gasto corporativo",         id: "KPI-FIN-026", get: p => neg(V(p).gc) },
+                  { kind: "pct",  label: "% sobre facturación",       id: "KPI-FIN-027", get: p => { const v = V(p); return pctOf(v.gc, v.venta); } },
+                  { kind: "item", label: "Otros gastos / ingresos",   id: "KPI-FIN-029", get: p => money(V(p).oc) },
+                  { kind: "sub",  label: "EBITDA División",           id: "KPI-FIN-028", get: p => money(V(p).eDiv) },
+                  { kind: "pct",  label: "% margen EBITDA división",  id: "KPI-FIN-030", get: p => { const v = V(p); return pctOf(v.eDiv, v.venta); } },
+                  { kind: "item", label: "Depreciación y amortización", id: "KPI-FIN-032", get: p => neg(V(p).da) },
+                  { kind: "item", label: "Gasto financiero",          id: "KPI-FIN-031", get: p => neg(V(p).gf) },
+                  { kind: "item", label: "Impuestos",                 id: "KPI-FIN-033", get: p => neg(V(p).imp) },
+                  { kind: "sub",  label: "Utilidad Neta",             id: "KPI-FIN-034", get: p => money(V(p).un) },
+                  { kind: "pct",  label: "% margen neto",             id: "KPI-FIN-035", get: p => { const v = V(p); return pctOf(v.un, v.venta); } },
+                ];
+                return (
+                  <>
+                    <PnLTable paises={pnlPaises} rows={rows} />
+                    <div style={{ fontSize: 10, color: "var(--text-4)", marginTop: 6, lineHeight: 1.5 }}>
+                      Los subtotales (Utilidad Bruta, EBITDA Tienda, EBITDA División y Utilidad Neta) se recalculan localmente
+                      sobre el valor absoluto de costos y gastos. El origen los almacena en negativo y los subtotales de la
+                      vista quedan sobrestimados. Pendiente de corrección en datos maestros.
+                      {paisesVis.length > pnlPaises.length && (
+                        <> · {paisesVis.length - pnlPaises.length} país(es) sin P&amp;L en el origen no se muestran.</>
+                      )}
+                    </div>
+                    <KpiGroupTable paises={pnlPaises} title="Volumen y mismas tiendas" cols={[
+                      { id: "KPI-FIN-003", label: "Piezas totales",   getVal: p => finVal(p, "fact_pzas") },
+                      { id: "KPI-FIN-002", label: "Facturación MT",   getVal: p => finVal(p, "facturacion_mt_venta", "money") },
+                      { id: "KPI-FIN-004", label: "Piezas MT",        getVal: p => finVal(p, "facturacion_mt_piezas") },
+                      { id: "KPI-FIN-005", label: "% Crec. MT vs AA", getVal: p => finVal(p, "pct_crecimiento_mts_vs_anio_anterior", "pct") },
+                    ]} />
+                    <KpiGroupTable paises={pnlPaises} title="Venta por canal" cols={[
+                      { id: "KPI-FIN-041", label: "Blind Lab",    getVal: p => finVal(p, "venta_blind_lab", "money") },
+                      { id: "KPI-FIN-042", label: "E-commerce",   getVal: p => finVal(p, "venta_on_line", "money") },
+                      { id: "KPI-FIN-043", label: "Marketplaces", getVal: p => finVal(p, "venta_marketplaces", "money") },
+                      { id: "KPI-FIN-044", label: "Coppel",       getVal: p => finVal(p, "venta_coppel", "money") },
+                    ]} />
+                    <KpiGroupTable paises={pnlPaises} title="Estructura financiera" cols={[
+                      { id: "KPI-FIN-036", label: "Free Cash Flow",   getVal: p => finVal(p, "free_cash_flow", "money") },
+                      { id: "KPI-FIN-037", label: "Tasa (spread)",    getVal: p => finVal(p, "tasa", "pct") },
+                      { id: "KPI-FIN-038", label: "Deuda",            getVal: p => finVal(p, "deuda", "money") },
+                      { id: "KPI-FIN-039", label: "Apalancamiento",   getVal: p => finVal(p, "apalancamiento_vs_deuda", "dec2") },
+                      { id: "KPI-FIN-040", label: "Seguros x recup.", getVal: p => finVal(p, "montos_seguros_por_recuperar", "money") },
+                    ]} />
+                  </>
+                );
+              })()}
             </>
           )}
 
@@ -1538,10 +1493,72 @@ export default function Cabina() {
 
 interface KpiColDef { id: string; label: string; getVal: (pais: string) => string; }
 
+
+type PnLRow = { kind: "sub" | "item" | "pct"; label: string; id?: string; get: (pais: string) => string };
+
+function PnLTable({ paises, rows }: { paises: readonly string[]; rows: PnLRow[] }) {
+  return (
+    <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
+        <thead>
+          <tr style={{ background: "var(--bg-2)" }}>
+            <Th left width={260}>Concepto</Th>
+            {paises.map((p) => (
+              <th key={p} style={{ padding: "7px 12px", textAlign: "right", fontWeight: 500, color: "var(--text-3)", fontSize: 11 }}>
+                <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em", marginRight: 5 }}>{p}</span>
+                {NOMBRE[p]}
+                <span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 4 }}>{MONEDA[p]}</span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => {
+            const isSub = r.kind === "sub";
+            const isPct = r.kind === "pct";
+            return (
+              <tr key={i} style={{
+                background: isSub ? "var(--bg-2)" : "var(--bg-0)",
+                borderTop: isSub ? "0.5px solid var(--border)" : "none",
+              }}>
+                <td style={{
+                  padding: isPct ? "2px 12px 4px 30px" : "5px 12px",
+                  paddingLeft: isSub ? 12 : 30,
+                  color: isSub ? "var(--text-1)" : isPct ? "var(--text-4)" : "var(--text-3)",
+                  fontWeight: isSub ? 600 : 400,
+                  fontSize: isPct ? 10 : 12,
+                }}>
+                  {r.label}
+                  {r.id && !isPct && (
+                    <span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 6, fontWeight: 400 }}>{r.id}</span>
+                  )}
+                </td>
+                {paises.map((p) => {
+                  const v = r.get(p);
+                  return (
+                    <td key={p} style={{
+                      padding: isPct ? "2px 12px 4px" : "5px 12px",
+                      textAlign: "right",
+                      fontWeight: isSub ? 600 : 400,
+                      fontSize: isPct ? 10 : 12,
+                      fontVariantNumeric: "tabular-nums",
+                      color: v === "—" ? "var(--text-4)" : isSub ? "var(--text-1)" : isPct ? "var(--text-4)" : "var(--text-2)",
+                    }}>{v}</td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function KpiGroupTable({ title, cols, paises }: { title: string; cols: KpiColDef[]; paises: readonly string[] }) {
   return (
-    <div style={{ marginTop: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+    <div style={{ marginTop: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
         <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)" }}>{title}</span>
         <span style={{ fontSize: 10, color: "var(--text-4)" }}>· {cols.length} KPIs</span>
       </div>
@@ -1556,7 +1573,7 @@ function KpiGroupTable({ title, cols, paises }: { title: string; cols: KpiColDef
           <tbody>
             {paises.map((pais, i) => (
               <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
-                <td style={{ padding: "10px 12px" }}>
+                <td style={{ padding: "6px 12px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{pais}</span>
                     <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
@@ -1565,7 +1582,7 @@ function KpiGroupTable({ title, cols, paises }: { title: string; cols: KpiColDef
                 {cols.map((c) => {
                   const v = c.getVal(pais);
                   return (
-                    <td key={c.id} style={{ padding: "10px 12px", textAlign: "right", color: v === "—" ? "var(--text-4)" : "var(--text-2)" }}>
+                    <td key={c.id} style={{ padding: "6px 12px", textAlign: "right", color: v === "—" ? "var(--text-4)" : "var(--text-2)" }}>
                       {v}
                     </td>
                   );
