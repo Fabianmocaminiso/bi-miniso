@@ -414,6 +414,8 @@ export default function Cabina() {
   type MvRow = Record<string, number | string | null>;
   const [mvData, setMvData] = useState<Record<string, Record<string, MvRow>>>({});
   const [mvMes,  setMvMes]  = useState<Record<string, string>>({});
+  const [mvDataAA, setMvDataAA] = useState<Record<string, Record<string, MvRow>>>({});
+  const [secMode, setSecMode] = useState<string>("imp");
   const [selPaises, setSelPaises] = useState<string[]>([...PAISES]);
   const paisesVis = PAISES.filter((p) => selPaises.includes(p));
   const togglePais = (p: string) => {
@@ -538,6 +540,10 @@ export default function Cabina() {
         setMvMes((prev) => ({ ...prev, [mv]: d.periodoUsado || "" }));
       })
       .catch(() => {});
+    fetch(`/api/mv?area=${mv}&year=${year - 1}&month=${month}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.ok) setMvDataAA((prev) => ({ ...prev, [mv]: d.data || {} })); })
+      .catch(() => {});
   }, [area, year, month]);
 
   async function preguntarIA() {
@@ -593,6 +599,47 @@ export default function Cabina() {
   const logVal = (p: string, f: string, m?: string) => mv("logistica", p, f, m);
   const mktVal = (p: string, f: string, m?: string) => mv("marketing", p, f, m);
   const mvHas  = (n: string) => Object.keys(mvData[n] || {}).length > 0;
+
+  // Sprint 14 — comparativo contra el mismo mes del año anterior
+  const crudo = (src: Record<string, Record<string, MvRow>>, mvName: string, pais: string, campo: string): number | null => {
+    const v = src[mvName]?.[pais]?.[campo];
+    if (v == null || typeof v === "string") return null;
+    const n = Number(v);
+    return Number.isNaN(n) ? null : n;
+  };
+  const fmtModo = (v: number | null, modo?: string): string => {
+    if (v == null) return "—";
+    if (modo === "pct")   return fmtPct(v * 100);
+    if (modo === "pctd")  return fmtPct(v);
+    if (modo === "money") return fmtMoney(v);
+    if (modo === "abs")   return fmtNum(Math.abs(v));
+    if (modo === "dec")   return v.toFixed(1);
+    if (modo === "dec2")  return v.toFixed(2);
+    return fmtNum(v);
+  };
+  const colorVar = (d: number, dir?: string): string => {
+    if (!dir) return "var(--text-4)";
+    const bueno = dir === "up" ? d >= 0 : d <= 0;
+    return bueno ? "var(--green)" : "var(--rose)";
+  };
+  const celdaArea = (mvName: string) => (pais: string, f: AreaFila): Celda => {
+    const main = mv(mvName, pais, f.campo, f.modo);
+    const bruto = mvData[mvName]?.[pais]?.[f.campo];
+    if (typeof bruto === "string") return { main, sec: "", col: "var(--text-4)" };
+    const cur = crudo(mvData, mvName, pais, f.campo);
+    const aa  = crudo(mvDataAA, mvName, pais, f.campo);
+    if (secMode === "aa") return { main, sec: aa == null ? "" : fmtModo(aa, f.modo), col: "var(--text-4)" };
+    if (secMode === "var") {
+      if (cur == null || aa == null) return { main, sec: "", col: "var(--text-4)" };
+      const esPct = f.modo === "pct" || f.modo === "pctd";
+      let d: number;
+      if (esPct) d = f.modo === "pct" ? (cur - aa) * 100 : cur - aa;
+      else { if (aa === 0) return { main, sec: "", col: "var(--text-4)" }; d = (cur - aa) / Math.abs(aa) * 100; }
+      const txt = (d >= 0 ? "+" : "") + d.toFixed(1) + (esPct ? " pts" : "%");
+      return { main, sec: txt, col: colorVar(d, f.dir) };
+    }
+    return { main, sec: "", col: "var(--text-4)" };
+  };
 
   const periodo =
     ptype === "ytd" ? `YTD ${MESES[month - 1]} ${year}` :
@@ -703,8 +750,8 @@ export default function Cabina() {
                 if (pnlPaises.length === 0) {
                   return <div style={{ color: "var(--text-4)", fontSize: 12, padding: "24px 0" }}>Sin datos de P&amp;L para los países seleccionados.</div>;
                 }
-                const V = (p: string) => {
-                  const g = (f: string) => finNum(p, f);
+                const V = (p: string, src?: Record<string, Record<string, MvRow>>) => {
+                  const g = (f: string) => crudo(src || mvData, "finanzas", p, f);
                   const a = (f: string) => { const v = g(f); return v == null ? null : Math.abs(v); };
                   const venta = g("fact_total");
                   const cv = a("costo_venta");
@@ -730,29 +777,57 @@ export default function Cabina() {
                 const neg = (n: number | null) => n == null ? "—" : "(" + fmtMoney(n) + ")";
                 const pctOf = (n: number | null, base: number | null) =>
                   (n == null || !base) ? "—" : fmtPct(n / base * 100);
+                const pnlSec = (p: string, k: string, esNeg: boolean): string => {
+                  const cur: any = V(p); 
+                  if (secMode === "imp") return esNeg ? neg(cur[k]) : money(cur[k]);
+                  const aa: any = V(p, mvDataAA);
+                  const pc = (cur[k] == null || !cur.venta) ? null : cur[k] / cur.venta * 100;
+                  const pa = (aa[k] == null || !aa.venta)   ? null : aa[k] / aa.venta * 100;
+                  if (secMode === "aa") return pa == null ? "" : fmtPct(pa);
+                  if (pc == null || pa == null) return "";
+                  const d = pc - pa;
+                  return (d >= 0 ? "+" : "") + d.toFixed(1) + " pts";
+                };
+                const pnlCol = (p: string, k: string, dir: string): string => {
+                  if (secMode !== "var") return "var(--text-4)";
+                  const cur: any = V(p), aa: any = V(p, mvDataAA);
+                  const pc = (cur[k] == null || !cur.venta) ? null : cur[k] / cur.venta * 100;
+                  const pa = (aa[k] == null || !aa.venta)   ? null : aa[k] / aa.venta * 100;
+                  if (pc == null || pa == null) return "var(--text-4)";
+                  return colorVar(pc - pa, dir);
+                };
+                const ventaSec = (p: string): string => {
+                  if (secMode === "imp") return "";
+                  const c = V(p).venta, a = V(p, mvDataAA).venta;
+                  if (secMode === "aa") return a == null ? "" : money(a);
+                  if (c == null || a == null || a === 0) return "";
+                  const d = (c - a) / Math.abs(a) * 100;
+                  return (d >= 0 ? "+" : "") + d.toFixed(1) + "%";
+                };
                 const rows: PnLRow[] = [
-                  { kind: "sub",  label: "Facturación Total",           id: "KPI-FIN-001", get: p => money(V(p).venta) },
-                  { kind: "item", label: "Costo de ventas",             id: "KPI-FIN-006", get: p => { const v = V(p); return pctOf(v.cv, v.venta); },   sub: p => neg(V(p).cv) },
-                  { kind: "item", label: "Costo de almacén",            id: "KPI-FIN-008", get: p => { const v = V(p); return pctOf(v.ca, v.venta); },   sub: p => neg(V(p).ca) },
-                  { kind: "item", label: "Nómina de almacén",           id: "KPI-FIN-010", get: p => { const v = V(p); return pctOf(v.nomAlm, v.venta); }, sub: p => neg(V(p).nomAlm) },
-                  { kind: "item", label: "Costo total",                 id: "KPI-FIN-012", get: p => { const v = V(p); return pctOf(v.ct, v.venta); },   sub: p => neg(V(p).ct) },
-                  { kind: "sub",  label: "Utilidad Bruta",              id: "KPI-FIN-014", get: p => { const v = V(p); return pctOf(v.ub, v.venta); },   sub: p => money(V(p).ub) },
-                  { kind: "item", label: "Nómina operativa",            id: "KPI-FIN-018", get: p => { const v = V(p); return pctOf(v.nomOp, v.venta); }, sub: p => neg(V(p).nomOp) },
-                  { kind: "item", label: "Gastos de ocupación",         id: "KPI-FIN-020", get: p => { const v = V(p); return pctOf(v.ocup, v.venta); }, sub: p => neg(V(p).ocup) },
-                  { kind: "item", label: "Gasto de distribución",       id: "KPI-FIN-022", get: p => { const v = V(p); return pctOf(v.dist, v.venta); }, sub: p => neg(V(p).dist) },
-                  { kind: "item", label: "Otros gastos operativos",     id: "KPI-FIN-016", get: p => { const v = V(p); return pctOf(v.gOp, v.venta); },  sub: p => neg(V(p).gOp) },
-                  { kind: "item", label: "Total gastos de operación",   id: "KPI-FIN-023", get: p => { const v = V(p); return pctOf(v.tgo, v.venta); },  sub: p => neg(V(p).tgo) },
-                  { kind: "sub",  label: "EBITDA Tienda",               id: "KPI-FIN-024", get: p => { const v = V(p); return pctOf(v.eTda, v.venta); }, sub: p => money(V(p).eTda) },
-                  { kind: "item", label: "Gasto corporativo",           id: "KPI-FIN-026", get: p => { const v = V(p); return pctOf(v.gc, v.venta); },   sub: p => neg(V(p).gc) },
-                  { kind: "item", label: "Otros gastos / ingresos",     id: "KPI-FIN-029", get: p => { const v = V(p); return pctOf(v.oc, v.venta); },   sub: p => money(V(p).oc) },
-                  { kind: "sub",  label: "EBITDA División",             id: "KPI-FIN-028", get: p => { const v = V(p); return pctOf(v.eDiv, v.venta); }, sub: p => money(V(p).eDiv) },
-                  { kind: "item", label: "Depreciación y amortización", id: "KPI-FIN-032", get: p => { const v = V(p); return pctOf(v.da, v.venta); },   sub: p => neg(V(p).da) },
-                  { kind: "item", label: "Gasto financiero",            id: "KPI-FIN-031", get: p => { const v = V(p); return pctOf(v.gf, v.venta); },   sub: p => neg(V(p).gf) },
-                  { kind: "item", label: "Impuestos",                   id: "KPI-FIN-033", get: p => { const v = V(p); return pctOf(v.imp, v.venta); },  sub: p => neg(V(p).imp) },
-                  { kind: "sub",  label: "Utilidad Neta",               id: "KPI-FIN-034", get: p => { const v = V(p); return pctOf(v.un, v.venta); },   sub: p => money(V(p).un) },
+                  { kind: "sub", label: "Facturación Total", id: "KPI-FIN-001", get: p => money(V(p).venta), sub: p => ventaSec(p) },
+                  { kind: "item", label: "Costo de ventas", id: "KPI-FIN-006", get: p => { const v: any = V(p); return (v.cv == null || !v.venta) ? "—" : fmtPct(v.cv / v.venta * 100); }, sub: p => pnlSec(p, "cv", true), subCol: p => pnlCol(p, "cv", "down") },
+                  { kind: "item", label: "Costo de almacén", id: "KPI-FIN-008", get: p => { const v: any = V(p); return (v.ca == null || !v.venta) ? "—" : fmtPct(v.ca / v.venta * 100); }, sub: p => pnlSec(p, "ca", true), subCol: p => pnlCol(p, "ca", "down") },
+                  { kind: "item", label: "Nómina de almacén", id: "KPI-FIN-010", get: p => { const v: any = V(p); return (v.nomAlm == null || !v.venta) ? "—" : fmtPct(v.nomAlm / v.venta * 100); }, sub: p => pnlSec(p, "nomAlm", true), subCol: p => pnlCol(p, "nomAlm", "down") },
+                  { kind: "item", label: "Costo total", id: "KPI-FIN-012", get: p => { const v: any = V(p); return (v.ct == null || !v.venta) ? "—" : fmtPct(v.ct / v.venta * 100); }, sub: p => pnlSec(p, "ct", true), subCol: p => pnlCol(p, "ct", "down") },
+                  { kind: "sub", label: "Utilidad Bruta", id: "KPI-FIN-014", get: p => { const v: any = V(p); return (v.ub == null || !v.venta) ? "—" : fmtPct(v.ub / v.venta * 100); }, sub: p => pnlSec(p, "ub", false), subCol: p => pnlCol(p, "ub", "up") },
+                  { kind: "item", label: "Nómina operativa", id: "KPI-FIN-018", get: p => { const v: any = V(p); return (v.nomOp == null || !v.venta) ? "—" : fmtPct(v.nomOp / v.venta * 100); }, sub: p => pnlSec(p, "nomOp", true), subCol: p => pnlCol(p, "nomOp", "down") },
+                  { kind: "item", label: "Gastos de ocupación", id: "KPI-FIN-020", get: p => { const v: any = V(p); return (v.ocup == null || !v.venta) ? "—" : fmtPct(v.ocup / v.venta * 100); }, sub: p => pnlSec(p, "ocup", true), subCol: p => pnlCol(p, "ocup", "down") },
+                  { kind: "item", label: "Gasto de distribución", id: "KPI-FIN-022", get: p => { const v: any = V(p); return (v.dist == null || !v.venta) ? "—" : fmtPct(v.dist / v.venta * 100); }, sub: p => pnlSec(p, "dist", true), subCol: p => pnlCol(p, "dist", "down") },
+                  { kind: "item", label: "Otros gastos operativos", id: "KPI-FIN-016", get: p => { const v: any = V(p); return (v.gOp == null || !v.venta) ? "—" : fmtPct(v.gOp / v.venta * 100); }, sub: p => pnlSec(p, "gOp", true), subCol: p => pnlCol(p, "gOp", "down") },
+                  { kind: "item", label: "Total gastos de operación", id: "KPI-FIN-023", get: p => { const v: any = V(p); return (v.tgo == null || !v.venta) ? "—" : fmtPct(v.tgo / v.venta * 100); }, sub: p => pnlSec(p, "tgo", true), subCol: p => pnlCol(p, "tgo", "down") },
+                  { kind: "sub", label: "EBITDA Tienda", id: "KPI-FIN-024", get: p => { const v: any = V(p); return (v.eTda == null || !v.venta) ? "—" : fmtPct(v.eTda / v.venta * 100); }, sub: p => pnlSec(p, "eTda", false), subCol: p => pnlCol(p, "eTda", "up") },
+                  { kind: "item", label: "Gasto corporativo", id: "KPI-FIN-026", get: p => { const v: any = V(p); return (v.gc == null || !v.venta) ? "—" : fmtPct(v.gc / v.venta * 100); }, sub: p => pnlSec(p, "gc", true), subCol: p => pnlCol(p, "gc", "down") },
+                  { kind: "item", label: "Otros gastos / ingresos", id: "KPI-FIN-029", get: p => { const v: any = V(p); return (v.oc == null || !v.venta) ? "—" : fmtPct(v.oc / v.venta * 100); }, sub: p => pnlSec(p, "oc", false), subCol: p => pnlCol(p, "oc", "") },
+                  { kind: "sub", label: "EBITDA División", id: "KPI-FIN-028", get: p => { const v: any = V(p); return (v.eDiv == null || !v.venta) ? "—" : fmtPct(v.eDiv / v.venta * 100); }, sub: p => pnlSec(p, "eDiv", false), subCol: p => pnlCol(p, "eDiv", "up") },
+                  { kind: "item", label: "Depreciación y amortización", id: "KPI-FIN-032", get: p => { const v: any = V(p); return (v.da == null || !v.venta) ? "—" : fmtPct(v.da / v.venta * 100); }, sub: p => pnlSec(p, "da", true), subCol: p => pnlCol(p, "da", "down") },
+                  { kind: "item", label: "Gasto financiero", id: "KPI-FIN-031", get: p => { const v: any = V(p); return (v.gf == null || !v.venta) ? "—" : fmtPct(v.gf / v.venta * 100); }, sub: p => pnlSec(p, "gf", true), subCol: p => pnlCol(p, "gf", "down") },
+                  { kind: "item", label: "Impuestos", id: "KPI-FIN-033", get: p => { const v: any = V(p); return (v.imp == null || !v.venta) ? "—" : fmtPct(v.imp / v.venta * 100); }, sub: p => pnlSec(p, "imp", true), subCol: p => pnlCol(p, "imp", "down") },
+                  { kind: "sub", label: "Utilidad Neta", id: "KPI-FIN-034", get: p => { const v: any = V(p); return (v.un == null || !v.venta) ? "—" : fmtPct(v.un / v.venta * 100); }, sub: p => pnlSec(p, "un", false), subCol: p => pnlCol(p, "un", "up") },
                 ];
                 return (
                   <>
+                    <SecToggle value={secMode} onChange={setSecMode} />
                     <PnLTable paises={pnlPaises} rows={rows} />
                     <div style={{ fontSize: 10, color: "var(--text-4)", marginTop: 6, lineHeight: 1.5 }}>
                       Todos los conceptos se expresan como % sobre facturación para permitir comparación entre monedas; el importe en moneda local va debajo en gris. Los subtotales se recalculan localmente
@@ -789,130 +864,17 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "operaciones" && (
             <>
-              <AreaHeader title={periodo} sub="Desempeño operativo por país — datos reales Redshift" loading={opsLoading} />
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 16 }}>
-                <KpiCard label="Vta Prom/Tienda" value={opsData ? fmtMoney(opsData.latam.vta_prom_tienda) : "—"} sub="LATAM · KPI-OPS-005" loading={opsLoading} kpiId="KPI-OPS-005" />
-                <KpiCard
-                  label="Ticket promedio"
-                  value={opsData ? fmtMoney(opsData.latam.ticket_promedio) : "—"}
-                  sub="LATAM ponderado · KPI-OPS-002"
-                  loading={opsLoading}
-                  kpiId="KPI-OPS-002"
-                />
-                <KpiCard
-                  label="Pzas por ticket"
-                  value={opsData ? opsData.latam.pzas_ticket.toFixed(1) : "—"}
-                  sub="LATAM ponderado · KPI-OPS-003"
-                  loading={opsLoading}
-                  kpiId="KPI-OPS-003"
-                />
-                <KpiCard
-                  label="Conversión MX"
-                  value={opsData?.data?.MX?.conversion_pct != null
-                    ? fmtPct(opsData.data.MX.conversion_pct)
-                    : "—"}
-                  sub={opsData?.data?.MX?.trafico_total != null
-                    ? `Tráfico: ${fmtNum(opsData.data.MX.trafico_total)} personas`
-                    : "Solo MX · KPI-OPS-004"}
-                  loading={opsLoading}
-                  kpiId="KPI-OPS-004"
-                />
-              </div>
-              {opsError && (
-                <div style={{ padding: "8px 12px", background: "var(--bg-3)", borderRadius: 6, color: "var(--rose)", fontSize: 11, marginBottom: 12 }}>
-                  Error cargando operaciones: {opsError}
+              <AreaHeader title={periodo} sub="Operaciones — comparativo por país" loading={loading} />
+              {mvHas("operaciones") ? (
+                <>
+                  <SecToggle value={secMode} onChange={setSecMode} />
+                  <AreaTable paises={paisesVis} bloques={BLK_OPERACIONES} cell={celdaArea("operaciones")} />
+                </>
+              ) : (
+                <div style={{ color: "var(--text-4)", fontSize: 12, padding: "24px 0" }}>
+                  Sin datos disponibles para esta área en el período seleccionado.
                 </div>
               )}
-              <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
-                  <thead>
-                    <tr style={{ background: "var(--bg-2)" }}>
-                      <Th left width={72}>País</Th>
-                      <ThKpi id="KPI-OPS-002">Ticket Prom.</ThKpi>
-                      <ThKpi id="KPI-OPS-003">Pzas/Ticket</ThKpi>
-                      <ThKpi id="KPI-OPS-004">Conversión</ThKpi>
-                      <ThKpi id="KPI-OPS-005">Vta Prom/Tienda</ThKpi>
-                      <ThKpi id="KPI-OPS-006">Clientes</ThKpi>
-                      <ThKpi id="KPI-OPS-017">OTD Almacén</ThKpi>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paisesVis.map((pais, i) => {
-                      const r = opsData?.data?.[pais];
-                      return (
-                        <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
-                          <td style={{ padding: "10px 12px" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{pais}</span>
-                              <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span><span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 4 }}>{MONEDA[pais]}</span>
-                            </div>
-                          </td>
-                          <Td>{r?.ticket_promedio ? fmtMoney(r.ticket_promedio) : "—"}</Td>
-                          <Td>{r?.pzas_ticket ? r.pzas_ticket.toFixed(1) : "—"}</Td>
-                          <Td>
-                            {pais === "MX" && r?.conversion_pct != null
-                              ? fmtPct(r.conversion_pct)
-                              : "—"
-                            }
-                          </Td>
-                          <Td>{r?.vta_prom_tienda ? fmtMoney(r.vta_prom_tienda) : "—"}</Td>
-                          <Td>{pais === "MX" && mktData
-                            ? fmtNum(mktData.transacciones.clientes_activos)
-                            : <span style={{ color: "var(--text-4)", fontSize: 10 }}>—</span>
-                          }</Td>
-                          <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ background: "var(--bg-3)", borderTop: "0.5px solid var(--border-2)" }}>
-                      <td style={{ padding: "8px 12px", color: "var(--text-4)", fontSize: 10, letterSpacing: "0.08em" }}>LATAM</td>
-                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-2)", fontWeight: 500 }}>
-                        {opsData ? fmtMoney(opsData.latam.ticket_promedio) : "—"}
-                      </td>
-                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-2)", fontWeight: 500 }}>
-                        {opsData ? opsData.latam.pzas_ticket.toFixed(1) : "—"}
-                      </td>
-                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-2)", fontWeight: 500 }}>
-                        {opsData ? fmtMoney(opsData.latam.vta_prom_tienda) : "—"}
-                      </td>
-                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-              <TableLegend />
-              {/* KPI Tables — Operaciones */}
-              <KpiGroupTable paises={paisesVis} title="Eficiencia de Venta" cols={[
-                { id: "KPI-OPS-002", label: "Ticket Promedio",    getVal: p => fmtMoney(opsData?.data?.[p]?.ticket_promedio ?? null) },
-                { id: "KPI-OPS-003", label: "Pzas / Ticket",      getVal: p => { const v = opsData?.data?.[p]?.pzas_ticket; return v != null ? v.toFixed(1) : "—"; } },
-                { id: "KPI-OPS-005", label: "Vta Prom/Tienda",    getVal: p => fmtMoney(opsData?.data?.[p]?.vta_prom_tienda ?? null) },
-                { id: "KPI-OPS-006", label: "Clientes (Tickets)", getVal: p => fmtNum(opsData?.data?.[p]?.num_tickets ?? null) },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Calidad de Operación" cols={[
-                { id: "KPI-OPS-004", label: "Conversión",        getVal: p => p === "MX" && opsData?.data?.MX?.conversion_pct != null ? fmtPct(opsData.data.MX.conversion_pct) : "—" },
-                { id: "KPI-OPS-001", label: "Cumpl. Presupuesto", getVal: p => opsVal(p, "cumplimiento_presupuesto", "pct") },
-                { id: "KPI-OPS-007", label: "SKUs sin exhibir",  getVal: p => opsVal(p, "skus_sin_exhibir", "pct") },
-                { id: "KPI-OPS-008", label: "36hrs entregas",    getVal: p => opsVal(p, "36_hrs", "pct") },
-                { id: "KPI-OPS-010", label: "Calif. Trade",      getVal: p => opsVal(p, "calificacion_trade_tiendas", "dec2") },
-                { id: "KPI-OPS-019", label: "Calif. Checklist",  getVal: p => opsVal(p, "calificacion_de_checklist", "dec2") },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Cumplimiento Presupuestal" cols={[
-                { id: "KPI-OPS-011", label: "% Comisiones",     getVal: p => opsVal(p, "pct_de_comisiones", "pct") },
-                { id: "KPI-OPS-012", label: "% Tiendas c/Bono", getVal: p => opsVal(p, "pct_de_tiendas_cobraron_bono_mas_del_50pct", "pct") },
-                { id: "KPI-OPS-015", label: "% Faltante Inv.",  getVal: p => opsVal(p, "pct_faltante_inventarios", "pct") },
-                { id: "KPI-OPS-016", label: "% Ajustes",        getVal: p => opsVal(p, "porc_ajustes", "pct") },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Servicio, Regiones y Mesa de Control" cols={[
-                { id: "KPI-OPS-009", label: "Venta Adicional",   getVal: p => opsVal(p, "venta_adicional", "dec2") },
-                { id: "KPI-OPS-013", label: "Mejor Región",      getVal: p => opsVal(p, "mejor_region_vs_presupuesto") },
-                { id: "KPI-OPS-014", label: "Peor Región",       getVal: p => opsVal(p, "peor_region_vs_presupuesto") },
-                { id: "KPI-OPS-017", label: "On Time Entregas",  getVal: p => opsVal(p, "on_time_de_entregas_almacen_a_tiendas", "pct") },
-                { id: "KPI-OPS-018", label: "Tickets Mesa Ctrl", getVal: p => opsVal(p, "tickets_mesa_de_control") },
-              ]} />
             </>
           )}
 
@@ -921,114 +883,17 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "comercial" && (
             <>
-              <AreaHeader title={periodo} sub="Stock, sell-through y SKUs activos — MX datos reales" loading={comLoading} />
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 16 }}>
-                <KpiCard
-                  label="Sell Thru MX"
-                  value={comData?.MX?.sell_thru != null ? fmtPct(comData.MX.sell_thru) : "—"}
-                  sub={comData?.MX?.piezas_mes
-                    ? `${fmtNum(comData.MX.piezas_mes)} pzas vendidas`
-                    : "KPI-COM-005"}
-                  loading={comLoading}
-                  kpiId="KPI-COM-005"
-                />
-                <KpiCard
-                  label="SKUs Prom/Tienda"
-                  value={comData?.MX?.skus_tiendas != null ? fmtNum(comData.MX.skus_tiendas) : "—"}
-                  sub="MX — tiendas activas · KPI-COM-008"
-                  loading={comLoading}
-                  kpiId="KPI-COM-008"
-                />
-                <KpiCard
-                  label="SKUs en CEDIS"
-                  value={comData?.MX?.skus_almacen != null ? fmtNum(comData.MX.skus_almacen) : "—"}
-                  sub="MX — almacén activo · KPI-COM-009"
-                  loading={comLoading}
-                  kpiId="KPI-COM-009"
-                />
-                <KpiCard
-                  label="Stock Prom/Tienda $"
-                  value={comData?.MX?.stock_tienda_valor != null ? fmtMoney(comData.MX.stock_tienda_valor) : "—"}
-                  sub={comData?.MX?.stock_tienda_pzas != null
-                    ? `${fmtNum(comData.MX.stock_tienda_pzas)} pzas/tienda`
-                    : "MX · KPI-COM-013"}
-                  loading={comLoading}
-                  kpiId="KPI-COM-013"
-                />
-              </div>
-              {comError && (
-                <div style={{ padding: "8px 12px", background: "var(--bg-3)", borderRadius: 6, color: "var(--rose)", fontSize: 11, marginBottom: 12 }}>
-                  Error cargando comercial: {comError}
+              <AreaHeader title={periodo} sub="Comercial — comparativo por país" loading={loading} />
+              {mvHas("comercial") ? (
+                <>
+                  <SecToggle value={secMode} onChange={setSecMode} />
+                  <AreaTable paises={paisesVis} bloques={BLK_COMERCIAL} cell={celdaArea("comercial")} />
+                </>
+              ) : (
+                <div style={{ color: "var(--text-4)", fontSize: 12, padding: "24px 0" }}>
+                  Sin datos disponibles para esta área en el período seleccionado.
                 </div>
               )}
-              <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
-                  <thead>
-                    <tr style={{ background: "var(--bg-2)" }}>
-                      <Th left width={72}>País</Th>
-                      <ThKpi id="KPI-COM-005">Sell Thru</ThKpi>
-                      <ThKpi id="KPI-COM-006">Sell Thru AA</ThKpi>
-                      <ThKpi id="KPI-COM-008">SKUs Tiendas</ThKpi>
-                      <ThKpi id="KPI-COM-009">SKUs Almacén</ThKpi>
-                      <ThKpi id="KPI-COM-012">Stock/Tienda (pzas)</ThKpi>
-                      <ThKpi id="KPI-COM-013">Stock/Tienda ($)</ThKpi>
-                      <ThKpi id="KPI-COM-001">Precio Prom.</ThKpi>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paisesVis.map((pais, i) => {
-                      const isMX = pais === "MX";
-                      const mx   = comData?.MX;
-                      return (
-                        <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
-                          <td style={{ padding: "10px 12px" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{pais}</span>
-                              <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span><span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 4 }}>{MONEDA[pais]}</span>
-                            </div>
-                          </td>
-                          <Td>{isMX && mx?.sell_thru != null ? fmtPct(mx.sell_thru) : "—"}</Td>
-                          <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                          <Td>{isMX && mx?.skus_tiendas != null ? fmtNum(mx.skus_tiendas) : "—"}</Td>
-                          <Td>{isMX && mx?.skus_almacen != null ? fmtNum(mx.skus_almacen) : "—"}</Td>
-                          <Td>{isMX && mx?.stock_tienda_pzas != null ? fmtNum(mx.stock_tienda_pzas) : "—"}</Td>
-                          <Td>{isMX && mx?.stock_tienda_valor != null ? fmtMoney(mx.stock_tienda_valor) : "—"}</Td>
-                          <Td>{isMX && mx?.precio_promedio != null ? fmtMoney(mx.precio_promedio) : "—"}</Td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ background: "var(--bg-3)", borderTop: "0.5px solid var(--border-2)" }}>
-                      <td style={{ padding: "8px 12px", color: "var(--text-4)", fontSize: 10, letterSpacing: "0.08em" }}>LATAM</td>
-                      <td colSpan={7} style={{ padding: "8px 12px", color: "var(--text-4)", fontSize: 10 }}>
-                        Inventario LATAM (CO/PE/CL/AR): pendiente tablas h_ventas_inventario por país
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-              <TableLegend />
-              {/* KPI Tables — Comercial */}
-              <KpiGroupTable paises={paisesVis} title="Sell-Through e Inventario" cols={[
-                { id: "KPI-COM-005", label: "Sell Thru",           getVal: p => p === "MX" ? fmtPct(comData?.MX?.sell_thru ?? null) : "—" },
-                { id: "KPI-COM-006", label: "Sell Thru AA",        getVal: p => comVal(p, "sell_thru_general_ano_anterior", "pct") },
-                { id: "KPI-COM-012", label: "Stock/Tienda (pzas)", getVal: p => p === "MX" ? fmtNum(comData?.MX?.stock_tienda_pzas ?? null) : "—" },
-                { id: "KPI-COM-013", label: "Stock/Tienda ($)",    getVal: p => p === "MX" ? fmtMoney(comData?.MX?.stock_tienda_valor ?? null) : "—" },
-                { id: "KPI-COM-001", label: "Precio Promedio",     getVal: p => p === "MX" ? fmtMoney(comData?.MX?.precio_promedio ?? null) : "—" },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="SKUs Activos" cols={[
-                { id: "KPI-COM-008", label: "SKUs Prom/Tienda",     getVal: p => p === "MX" ? fmtNum(comData?.MX?.skus_tiendas ?? null) : "—" },
-                { id: "KPI-COM-009", label: "SKUs en CEDIS",        getVal: p => p === "MX" ? fmtNum(comData?.MX?.skus_almacen ?? null) : "—" },
-                { id: "KPI-COM-010", label: "SKUs <3 pzas CEDIS",   getVal: p => comVal(p, "sku_menos_de_3_piezas_en_cedis") },
-                { id: "KPI-COM-011", label: "SKUs <3 pzas Tiendas", getVal: p => comVal(p, "skus_menos_de_3_piezas_en_tiendas") },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Rebajas y Canal" cols={[
-                { id: "KPI-COM-002", label: "Stock Rebajas %",  getVal: p => comVal(p, "stock_rebajas_pct_descuentos", "pct") },
-                { id: "KPI-COM-003", label: "Piezas Rebajas %", getVal: p => comVal(p, "piezas_rebajas_pct_descuentos", "pct") },
-                { id: "KPI-COM-004", label: "Venta Rebajas %",  getVal: p => comVal(p, "venta_rebajas_pct_descuentos", "pct") },
-                { id: "KPI-COM-007", label: "% Vta Prod. Nac.", getVal: p => comVal(p, "pct_de_venta_produccion_nacional", "pct") },
-              ]} />
             </>
           )}
 
@@ -1037,47 +902,17 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "rrhh" && (
             <>
-              <AreaHeader title={periodo} sub={mvHas("rh") ? `MX y CO · datos a ${mvMes["rh"] || ""}` : "Headcount, rotación y cobertura por país"} badge={mvHas("rh") ? undefined : <BadgePending />} />
-              
-              {/* KPI Tables — RRHH */}
-              <KpiGroupTable paises={paisesVis} title="Headcount y Rotación — Tiendas" cols={[
-                { id: "KPI-RH-011", label: "Bajas Mes",          getVal: p => rhVal(p, "numero_de_bajas_del_mes_en_general_tiendas") },
-                { id: "KPI-RH-012", label: "Activos Prom.",      getVal: p => rhVal(p, "numero_promedio_de_activos_en_general_tiendas_del_mes") },
-                { id: "KPI-RH-013", label: "Rotación Gral.",     getVal: p => rhVal(p, "rotacion_general_tiendas", "pct") },
-                { id: "KPI-RH-017", label: "Prom. Emp/Tienda",   getVal: p => rhVal(p, "promedio_empleados_x_tienda", "dec") },
-                { id: "KPI-RH-025", label: "% Cob. Plantilla",   getVal: p => rhVal(p, "pct_cobertura_plantilla_en_tienda", "pct") },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Compensación Variable — Tiendas" cols={[
-                { id: "KPI-RH-027", label: "Alcance Promotor",    getVal: p => rhVal(p, "alcance_de_comision_real_mensual_promotor", "money") },
-                { id: "KPI-RH-029", label: "% Comp. Var. Prom.",  getVal: p => rhVal(p, "pct_alcance_de_compensacion_variable_promotores", "pct") },
-                { id: "KPI-RH-030", label: "Alcance Subgerente",  getVal: p => rhVal(p, "alcance_de_comision_real_mensual_subgerente", "money") },
-                { id: "KPI-RH-032", label: "% Comp. Var. Subg.",  getVal: p => rhVal(p, "pct_alcance_de_compensacion_variable_subgerentes", "pct") },
-                { id: "KPI-RH-033", label: "Alcance Gerente",     getVal: p => rhVal(p, "alcance_de_comision_real_mensual_gerente", "money") },
-                { id: "KPI-RH-035", label: "% Comp. Var. Gte.",   getVal: p => rhVal(p, "pct_alcance_de_compensacion_variable_gerentes", "pct") },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Headcount — Corporativo y Almacén" cols={[
-                { id: "KPI-RH-002", label: "Bajas Corp.",       getVal: p => rhVal(p, "numero_de_bajas_del_mes_en_el_corporativo") },
-                { id: "KPI-RH-003", label: "Activos Corp.",     getVal: p => rhVal(p, "numero_promedio_de_activos_en_el_corporativo_al_mes") },
-                { id: "KPI-RH-004", label: "Rotación Corp.",    getVal: p => rhVal(p, "rotacion_corporativo", "pct") },
-                { id: "KPI-RH-019", label: "Retención <90d",   getVal: p => rhVal(p, "retencion_de_personal_tienda_antes_de_90_dias", "pct") },
-                { id: "KPI-RH-022", label: "Vac. Subgerente",  getVal: p => rhVal(p, "numero_de_vacantes_subgerente") },
-                { id: "KPI-RH-023", label: "Vac. Gerente",     getVal: p => rhVal(p, "numero_de_vacantes_gerente") },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Almacén — Operativo y Maquila" cols={[
-                { id: "KPI-RH-005", label: "Bajas Operativo",   getVal: p => rhVal(p, "numero_de_bajas_del_mes_en_la_parte_operativa_del_almacen") },
-                { id: "KPI-RH-007", label: "Rotación Operativo", getVal: p => rhVal(p, "rotacion_operativa_almacen", "pct") },
-                { id: "KPI-RH-008", label: "Bajas Maquila",     getVal: p => rhVal(p, "numero_de_bajas_del_mes_en_la_parte_maquila_del_almacen") },
-                { id: "KPI-RH-010", label: "Rotación Maquila",  getVal: p => rhVal(p, "rotacion_maquila_almacen", "pct") },
-                { id: "KPI-RH-026", label: "% Cob. Almacén",    getVal: p => rhVal(p, "pct_cobertura_plantilla_en_almacen", "pct") },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Gerentes, Contratación y Satisfacción" cols={[
-                { id: "KPI-RH-014", label: "Bajas Gerentes",    getVal: p => rhVal(p, "numero_de_bajas_del_mes_en_gerente_tiendas") },
-                { id: "KPI-RH-016", label: "Rotación Gerentes", getVal: p => rhVal(p, "rotacion_gerentes_tiendas", "pct") },
-                { id: "KPI-RH-024", label: "% Cob. Interna Gtes", getVal: p => rhVal(p, "pct_cobertura_interna_gerenciales", "pct") },
-                { id: "KPI-RH-020", label: "Días Contrat. Gcial", getVal: p => rhVal(p, "tiempo_promedio_contratacion_tiendas_gerenciales", "dec") },
-                { id: "KPI-RH-021", label: "Días Contrat. Prom.", getVal: p => rhVal(p, "tiempo_promedio_contratacion_tiendas_promotores", "dec") },
-                { id: "KPI-RH-001", label: "Satisfacción Cía.",  getVal: p => rhVal(p, "calificacion_satisfaccion_compania", "dec2") },
-              ]} />
+              <AreaHeader title={periodo} sub="RRHH — comparativo por país" loading={loading} />
+              {mvHas("rh") ? (
+                <>
+                  <SecToggle value={secMode} onChange={setSecMode} />
+                  <AreaTable paises={paisesVis} bloques={BLK_RRHH} cell={celdaArea("rh")} />
+                </>
+              ) : (
+                <div style={{ color: "var(--text-4)", fontSize: 12, padding: "24px 0" }}>
+                  Sin datos disponibles para esta área en el período seleccionado.
+                </div>
+              )}
             </>
           )}
 
@@ -1086,195 +921,17 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "logistica" && (
             <>
-              <AreaHeader title={periodo} sub="Inventario, surtimiento y distribución — MX datos reales" loading={logLoading} />
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 16 }}>
-                <KpiCard
-                  label="Inv CEDIS MX (pzas)"
-                  value={logData?.MX?.cedis_total_pzas != null ? fmtNum(logData.MX.cedis_total_pzas) : "—"}
-                  sub={logData?.MX?.cedis_meses != null
-                    ? `${logData.MX.cedis_meses} meses cobertura`
-                    : "KPI-LOG-001"}
-                  loading={logLoading}
-                  kpiId="KPI-LOG-001"
-                />
-                <KpiCard
-                  label="Fill Rate MX"
-                  value={logData?.MX?.fill_rate_pct != null ? fmtPct(logData.MX.fill_rate_pct) : "—"}
-                  sub={logData?.MX?.skus_surtidos != null
-                    ? `${fmtNum(logData.MX.skus_surtidos)} / ${fmtNum(logData.MX.skus_ideal ?? 0)} SKUs`
-                    : "KPI-LOG-003"}
-                  loading={logLoading}
-                  kpiId="KPI-LOG-003"
-                />
-                <KpiCard label="OTP15"              value="—" sub="KPI-LOG-004" pending />
-                <KpiCard label="% Gto dist / venta" value="—" sub="KPI-LOG-002" pending />
-              </div>
-              {logError && (
-                <div style={{ padding: "8px 12px", background: "var(--bg-3)", borderRadius: 6, color: "var(--rose)", fontSize: 11, marginBottom: 12 }}>
-                  Error cargando logística: {logError}
+              <AreaHeader title={periodo} sub="Logística — comparativo por país" loading={loading} />
+              {mvHas("logistica") ? (
+                <>
+                  <SecToggle value={secMode} onChange={setSecMode} />
+                  <AreaTable paises={paisesVis} bloques={BLK_LOGISTICA} cell={celdaArea("logistica")} />
+                </>
+              ) : (
+                <div style={{ color: "var(--text-4)", fontSize: 12, padding: "24px 0" }}>
+                  Sin datos disponibles para esta área en el período seleccionado.
                 </div>
               )}
-
-              {/* Tabla inventario y fill rate por país */}
-              <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 16 }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
-                  <thead>
-                    <tr style={{ background: "var(--bg-2)" }}>
-                      <Th left width={72}>País</Th>
-                      <ThKpi id="KPI-LOG-001">Inv CEDIS Disp (pzas)</ThKpi>
-                      <ThKpi id="KPI-LOG-003">Fill Rate</ThKpi>
-                      <ThKpi id="KPI-LOG-004">OTP15</ThKpi>
-                      <ThKpi id="KPI-LOG-005">Pzas Surtidas</ThKpi>
-                      <ThKpi id="KPI-LOG-019">Total Inv (meses)</ThKpi>
-                      <ThKpi id="KPI-LOG-022">CEDIS Disp (meses)</ThKpi>
-                      <ThKpi id="KPI-LOG-002">% Gto Dist/Vta</ThKpi>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paisesVis.map((pais, i) => {
-                      const isMX = pais === "MX";
-                      const mx   = logData?.MX;
-                      return (
-                        <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
-                          <td style={{ padding: "10px 12px" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{pais}</span>
-                              <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span><span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 4 }}>{MONEDA[pais]}</span>
-                            </div>
-                          </td>
-                          <Td>{isMX && mx?.cedis_total_pzas != null ? fmtNum(mx.cedis_total_pzas) : "—"}</Td>
-                          <Td>{isMX && mx?.fill_rate_pct != null
-                            ? <span style={{ color: Number(mx.fill_rate_pct) >= 85 ? "var(--green)" : Number(mx.fill_rate_pct) >= 70 ? "var(--amber)" : "var(--rose)" }}>
-                                {fmtPct(mx.fill_rate_pct)}
-                              </span>
-                            : "—"}
-                          </Td>
-                          <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                          <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                          <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                          <Td>{isMX && mx?.cedis_meses != null ? `${mx.cedis_meses} sem` : "—"}</Td>
-                          <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ background: "var(--bg-3)", borderTop: "0.5px solid var(--border-2)" }}>
-                      <td style={{ padding: "8px 12px", color: "var(--text-4)", fontSize: 10, letterSpacing: "0.08em" }}>LATAM</td>
-                      <td colSpan={7} style={{ padding: "8px 12px", color: "var(--text-4)", fontSize: 10 }}>
-                        Inventario CO/PE/CL/AR: pendiente tablas h_ventas_inventario por país en Redshift
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-
-              {/* Tramos de Cadena — datos reales del diccionario */}
-              <div style={{ marginBottom: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                  <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)" }}>Objetivo de Tramos en la Cadena (semanas)</span>
-                  <span style={{ color: "var(--text-4)" }}>·</span>
-                  <span style={{ fontSize: 11, color: "var(--text-3)" }}>Miniso · Fuente: Diccionario Técnico v5.2</span>
-                  <span style={{
-                    background: "#0a1a0a", border: "0.5px solid #1B4332",
-                    color: "#4ade80", fontSize: 9, padding: "2px 7px", borderRadius: 8,
-                  }}>datos confirmados</span>
-                </div>
-                <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
-                    <thead>
-                      <tr style={{ background: "var(--bg-2)" }}>
-                        <Th left width={72}>País</Th>
-                        <Th>Producción</Th>
-                        <Th>On Stock</Th>
-                        <Th>Por Cargar</Th>
-                        <Th>Tránsito/Aduana</Th>
-                        <Th>CEDIS</Th>
-                        <Th>Trám. Tienda</Th>
-                        <Th>Tiendas</Th>
-                        <Th>Total sem.</Th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paisesVis.map((pais, i) => {
-                        const t = TRAMOS[pais];
-                        const odd = i % 2 === 0;
-                        // Highlight worst/best on total weeks (higher = worse for logistics)
-                        const totals = Object.values(TRAMOS).map(x => x.total);
-                        const maxT = Math.max(...totals);
-                        const minT = Math.min(...totals);
-                        const totalColor = t.total === maxT ? "var(--rose)" : t.total === minT ? "var(--green)" : "var(--text-2)";
-                        return (
-                          <tr key={pais} style={{ background: odd ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
-                            <td style={{ padding: "10px 12px" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{pais}</span>
-                                <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{pais}</span>
-                              </div>
-                            </td>
-                            <Td><span style={{ color: "var(--text-2)" }}>{t.prod}</span></Td>
-                            <Td><span style={{ color: "var(--text-2)" }}>{t.onStock}</span></Td>
-                            <Td><span style={{ color: "var(--text-2)" }}>{t.porCargar}</span></Td>
-                            <Td><span style={{ color: "var(--text-2)" }}>{t.transito}</span></Td>
-                            <Td><span style={{ color: "var(--text-2)" }}>{t.cedis}</span></Td>
-                            <Td><span style={{ color: "var(--text-2)" }}>{t.transTienda}</span></Td>
-                            <Td><span style={{ color: "var(--text-2)" }}>{t.tiendas}</span></Td>
-                            <Td><span style={{ color: totalColor, fontWeight: 500 }}>{t.total}</span></Td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                <div style={{ display: "flex", gap: 16, marginTop: 8, paddingLeft: 2 }}>
-                  <LegendItem color="var(--green)" label="Menor cadena (mejor)" />
-                  <LegendItem color="var(--rose)"  label="Mayor cadena (revisar)" />
-                  <span style={{ fontSize: 10, color: "var(--text-4)" }}>Unidad: Miniso · Solo cadena estándar, excluye NE y Blind Lab</span>
-                </div>
-              </div>
-
-              {/* KPI Tables — Logística */}
-              <KpiGroupTable paises={paisesVis} title="Surtimiento y Fill Rate" cols={[
-                { id: "KPI-LOG-003", label: "Fill Rate %",         getVal: p => p === "MX" ? fmtPct(logData?.MX?.fill_rate_pct ?? null) : "—" },
-                { id: "KPI-LOG-001", label: "CEDIS Disp. (pzas)",  getVal: p => p === "MX" ? fmtNum(logData?.MX?.cedis_lf_pzas ?? null) : "—" },
-                { id: "KPI-LOG-022", label: "CEDIS Disp. (sem.)",  getVal: p => p === "MX" && logData?.MX?.cedis_meses != null ? `${logData.MX.cedis_meses} sem` : "—" },
-                { id: "KPI-LOG-005", label: "Total pzas surtidas", getVal: p => logVal(p, "total_piezas_surtidas_a_tiendas") },
-                { id: "KPI-LOG-004", label: "OTP15",               getVal: p => logVal(p, "otp15", "pct") },
-                { id: "KPI-LOG-034", label: "Nivel serv. CEDIS",   getVal: _ => "—" },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Inventario Total" cols={[
-                { id: "KPI-LOG-013", label: "Total inv. (pzas)",      getVal: p => logVal(p, "inv_disponible_sap") },
-                { id: "KPI-LOG-014", label: "Inv. tiendas (pzas)",    getVal: p => logVal(p, "inv_tdas") },
-                { id: "KPI-LOG-015", label: "Inv. tránsito tiendas",  getVal: p => logVal(p, "inv_transito_tdas") },
-                { id: "KPI-LOG-019", label: "Total inv. (meses)",     getVal: p => logVal(p, "total_inventario_meses", "dec2") },
-                { id: "KPI-LOG-020", label: "Inv. tiendas (meses)",   getVal: p => logVal(p, "inventario_tiendas_meses", "dec2") },
-                { id: "KPI-LOG-028", label: "OTB (Open To Buy)",      getVal: _ => "—" },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Costos de Distribución" cols={[
-                { id: "KPI-LOG-002", label: "Gasto dist./venta %",  getVal: p => logVal(p, "pct_de_gasto_distribucion_vs_la_venta_distribucion", "pct") },
-                { id: "KPI-LOG-007", label: "Costo/pza etiquetado", getVal: p => logVal(p, "costo_por_pieza_etiquetado", "dec2") },
-                { id: "KPI-LOG-008", label: "Costo/pza almacenada", getVal: p => logVal(p, "costo_por_pieza_almacenada", "dec2") },
-                { id: "KPI-LOG-009", label: "Costo/pza surtida",    getVal: p => logVal(p, "costo_por_pieza_surtida", "dec2") },
-                { id: "KPI-LOG-010", label: "Costo/pza distribución",getVal: p => logVal(p, "costo_por_pieza_distribucion", "dec2") },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Inventario en Piezas — Cadena Completa" cols={[
-                { id: "KPI-LOG-012", label: "En China",          getVal: p => logVal(p, "inventario_en_china_piezas") },
-                { id: "KPI-LOG-016", label: "No Disp. Aduana",   getVal: p => logVal(p, "inventario_no_disponible_en_aduana_piezas") },
-                { id: "KPI-LOG-017", label: "En Tránsito",       getVal: p => logVal(p, "inventario_en_transito_piezas") },
-                { id: "KPI-LOG-018", label: "No Disp. País",     getVal: p => logVal(p, "inventario_no_disponible_pais_piezas") },
-                { id: "KPI-LOG-011", label: "% Carga CEDIS",     getVal: p => logVal(p, "porc_carga_cedis", "pctd") },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Cobertura en Meses" cols={[
-                { id: "KPI-LOG-021", label: "Tránsito Tdas",     getVal: p => logVal(p, "inventario_transito_tiendas_meses", "dec2") },
-                { id: "KPI-LOG-023", label: "Aduana",            getVal: p => logVal(p, "inventario_no_disponible_en_aduana_meses", "dec2") },
-                { id: "KPI-LOG-024", label: "Tránsito China",    getVal: p => logVal(p, "inventario_en_transito_meses", "dec2") },
-                { id: "KPI-LOG-025", label: "Pend. Zarpar",      getVal: p => logVal(p, "inventario_liberado_pendiente_de_zarpar_meses", "dec2") },
-                { id: "KPI-LOG-026", label: "No Disp. País",     getVal: p => logVal(p, "inventario_no_disponible_pais_meses", "dec2") },
-                { id: "KPI-LOG-027", label: "En China",          getVal: p => logVal(p, "inventario_en_china_meses", "dec2") },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Productividad y Almacenaje" cols={[
-                { id: "KPI-LOG-006", label: "Prom. Almacenaje/sem", getVal: p => logVal(p, "promedio_almacenaje_por_semana") },
-              ]} />
             </>
           )}
 
@@ -1283,122 +940,17 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "marketing" && (
             <>
-              <AreaHeader title={periodo} sub="MinisoLove · Loyalty MX — datos en tiempo real desde Redshift" loading={mktLoading} />
-
-              {/* KPI Cards — datos reales MX */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 16 }}>
-                <KpiCard
-                  label="Registros nuevos"
-                  value={mktData ? fmtNum(mktData.registros.nuevos_mes) : "—"}
-                  sub={mktData ? `Base total: ${fmtNum(mktData.registros.total_base)}` : "KPI-MKT-005"}
-                  loading={mktLoading}
-                  kpiId="KPI-MKT-005"
-                />
-                <KpiCard
-                  label="Venta MinisoLove"
-                  value={mktData ? fmtMoney(mktData.transacciones.venta_loyalty) : "—"}
-                  sub={mktData ? `${fmtNum(mktData.transacciones.transacciones)} tickets loyalty` : "KPI-MKT-015"}
-                  loading={mktLoading}
-                  kpiId="KPI-MKT-015"
-                />
-                <KpiCard
-                  label="% Part. venta MX"
-                  value={
-                    mktData && data?.MX?.facturacion_total
-                      ? fmtPct(mktData.transacciones.venta_loyalty / (data.MX.facturacion_total || 1) * 100)
-                      : "—"
-                  }
-                  sub="Loyalty / Facturación MX"
-                  loading={mktLoading}
-                  kpiId="KPI-MKT-016"
-                />
-                <KpiCard
-                  label="Monto pts redimidos"
-                  value={mktData ? fmtMoney(mktData.puntos.monto_redimidos_total) : "—"}
-                  sub={mktData ? `${fmtNum(mktData.puntos.redimidos_total)} corazones` : "KPI-MKT-009"}
-                  loading={mktLoading}
-                  kpiId="KPI-MKT-009"
-                />
-              </div>
-
-              {/* Tabla canales — puntos ganados y redimidos */}
-              {mktError && (
-                <div style={{ padding: "10px 14px", background: "var(--bg-3)", border: "0.5px solid var(--rose)", borderRadius: 8, fontSize: 11, color: "var(--rose)", marginBottom: 12 }}>
-                  Error cargando loyalty: {mktError}
+              <AreaHeader title={periodo} sub="Marketing — comparativo por país" loading={loading} />
+              {mvHas("marketing") ? (
+                <>
+                  <SecToggle value={secMode} onChange={setSecMode} />
+                  <AreaTable paises={paisesVis} bloques={BLK_MARKETING} cell={celdaArea("marketing")} />
+                </>
+              ) : (
+                <div style={{ color: "var(--text-4)", fontSize: 12, padding: "24px 0" }}>
+                  Sin datos disponibles para esta área en el período seleccionado.
                 </div>
               )}
-
-              <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 12 }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
-                  <thead>
-                    <tr style={{ background: "var(--bg-2)" }}>
-                      <Th left>Canal</Th>
-                      <ThKpi id="KPI-MKT-006/007/008">Pts Ganados</ThKpi>
-                      <ThKpi id="">Monto Ganados</ThKpi>
-                      <ThKpi id="KPI-MKT-006/007/008">Pts Redimidos</ThKpi>
-                      <ThKpi id="KPI-MKT-009">Monto Redimidos</ThKpi>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mktData?.puntos.por_canal.map((row, i) => (
-                      <tr key={row.canal} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
-                        <td style={{ padding: "10px 12px", color: "var(--text-2)", fontWeight: 500 }}>{row.canal}</td>
-                        <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-2)" }}>{fmtNum(row.ganados)}</td>
-                        <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-2)" }}>{fmtMoney(row.monto_g)}</td>
-                        <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--text-2)" }}>{fmtNum(row.redimidos)}</td>
-                        <td style={{ padding: "10px 12px", textAlign: "right", color: "var(--rose)" }}>{fmtMoney(row.monto_r)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ background: "var(--bg-3)", borderTop: "0.5px solid var(--border-2)" }}>
-                      <td style={{ padding: "8px 12px", color: "var(--text-4)", fontSize: 10, letterSpacing: "0.08em", fontWeight: 600 }}>TOTAL MX</td>
-                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-1)", fontWeight: 600 }}>{fmtNum(mktData?.puntos.ganados_total ?? null)}</td>
-                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-4)" }}>—</td>
-                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--text-1)", fontWeight: 600 }}>{fmtNum(mktData?.puntos.redimidos_total ?? null)}</td>
-                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--rose)", fontWeight: 600 }}>{fmtMoney(mktData?.puntos.monto_redimidos_total ?? null)}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-
-              {/* Clientes activos loyalty */}
-              {mktData && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 12 }}>
-                  <KpiCard label="Clientes activos loyalty" value={fmtNum(mktData.transacciones.clientes_activos)} sub="Con compra en el período" kpiId="KPI-MKT-013" />
-                  <KpiCard label="Piezas en tickets loyalty" value={fmtNum(mktData.transacciones.piezas)} sub="Solo transacciones loyalty" kpiId="KPI-MKT-015" />
-                  <KpiCard label="Clientes que redimieron" value={fmtNum(mktData.puntos.clientes_redim)} sub="POS — descuento" kpiId="KPI-MKT-011" />
-                </div>
-              )}
-
-              {/* KPI Tables — Marketing */}
-              <KpiGroupTable paises={paisesVis} title="Membresía MinisoLove" cols={[
-                { id: "KPI-MKT-005", label: "Registros Nuevos",   getVal: p => p === "MX" ? fmtNum(mktData?.registros?.nuevos_mes ?? null) : "—" },
-                { id: "KPI-MKT-013", label: "Tickets MinisoLove", getVal: p => p === "MX" ? fmtNum(mktData?.transacciones?.transacciones ?? null) : "—" },
-                { id: "KPI-MKT-015", label: "Venta MinisoLove",   getVal: p => p === "MX" ? fmtMoney(mktData?.transacciones?.venta_loyalty ?? null) : "—" },
-                { id: "KPI-MKT-016", label: "% Part. Venta",      getVal: p => { if (p !== "MX" || !mktData || !data?.MX?.facturacion_total) return "—"; return fmtPct(mktData.transacciones.venta_loyalty / data.MX.facturacion_total * 100); } },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Puntos de Fidelidad" cols={[
-                { id: "KPI-MKT-006", label: "Puntos Redim. POS",    getVal: p => p === "MX" ? fmtNum(mktData?.puntos?.redimidos_pos ?? null) : "—" },
-                { id: "KPI-MKT-007", label: "Puntos Redim. E-Comm", getVal: p => p === "MX" ? fmtNum(mktData?.puntos?.redimidos_app ?? null) : "—" },
-                { id: "KPI-MKT-008", label: "Puntos Redim. App",    getVal: p => p === "MX" ? fmtNum(mktData?.puntos?.redimidos_app ?? null) : "—" },
-                { id: "KPI-MKT-009", label: "Monto Redimidos",      getVal: p => p === "MX" ? fmtMoney(mktData?.puntos?.monto_redimidos_total ?? null) : "—" },
-                { id: "KPI-MKT-011", label: "% Redención/Venta",    getVal: p => { if (p !== "MX" || !mktData || !data?.MX?.facturacion_total) return "—"; return fmtPct(mktData.puntos.monto_redimidos_total / data.MX.facturacion_total * 100); } },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Tráfico y Retención" cols={[
-                { id: "KPI-MKT-001", label: "Visitas Tiendas",      getVal: p => mktVal(p, "visitas_tdas") },
-                { id: "KPI-MKT-012", label: "Frec. Compra Loyalty", getVal: p => mktVal(p, "frecuencia_de_compra_de_los_clientes_top_loyalty", "dec2") },
-                { id: "KPI-MKT-014", label: "% Part. Tickets",      getVal: p => mktVal(p, "pct_participacion_tickets_minisolove", "pct") },
-                { id: "KPI-MKT-018", label: "Clientes +1 compra",   getVal: p => mktVal(p, "clientes_con_mas_de_1_compra_en_180_dias") },
-                { id: "KPI-MKT-019", label: "Clientes +2 compras",  getVal: p => mktVal(p, "clientes_con_mas_de_2_compras_en_180_dias") },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Tráfico y Sensores" cols={[
-                { id: "KPI-MKT-002", label: "Sensores Actual",   getVal: p => mktVal(p, "sensores_tdas_actual") },
-                { id: "KPI-MKT-003", label: "Sensores Pasado",   getVal: p => mktVal(p, "sensores_tdas_pasado") },
-                { id: "KPI-MKT-004", label: "% Aumento Tráfico", getVal: p => mktVal(p, "porc_aumento_trafico", "pct") },
-                { id: "KPI-MKT-010", label: "Ventas Tot. Mkt",   getVal: p => mktVal(p, "ventas_total_marketing", "money") },
-                { id: "KPI-MKT-017", label: "Top POS del Mes",   getVal: p => mktVal(p, "top_de_pos_mes_correspondiente") },
-              ]} />
             </>
           )}
 
@@ -1407,18 +959,17 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "auditoria" && (
             <>
-              <AreaHeader title={periodo} sub={mvHas("auditoria") ? `CO · datos a ${mvMes["auditoria"] || ""}` : "Robo, merma y eventos de seguridad por país"} badge={mvHas("auditoria") ? undefined : <BadgePending />} />
-              {/* KPI Tables — Auditoría */}
-              <KpiGroupTable paises={paisesVis} title="Merma y Pérdida" cols={[
-                { id: "KPI-AUD-001", label: "Robo Tiendas",  getVal: p => audVal(p, "robo_tdas", "pct") },
-                { id: "KPI-AUD-002", label: "Merma Tiendas", getVal: p => audVal(p, "merma_tdas", "pct") },
-                { id: "KPI-AUD-003", label: "Caducados",     getVal: p => audVal(p, "caducados_tdas", "pct") },
-              ]} />
-              <KpiGroupTable paises={paisesVis} title="Incidencias de Seguridad" cols={[
-                { id: "KPI-AUD-004", label: "Eventos Farderos", getVal: p => audVal(p, "eventos_farderos") },
-                { id: "KPI-AUD-005", label: "Robo Interno",     getVal: p => audVal(p, "eventos_robo_interno") },
-                { id: "KPI-AUD-006", label: "Robo de Camión",   getVal: p => audVal(p, "robo_de_camion") },
-              ]} />
+              <AreaHeader title={periodo} sub="Auditoría — comparativo por país" loading={loading} />
+              {mvHas("auditoria") ? (
+                <>
+                  <SecToggle value={secMode} onChange={setSecMode} />
+                  <AreaTable paises={paisesVis} bloques={BLK_AUDITORIA} cell={celdaArea("auditoria")} />
+                </>
+              ) : (
+                <div style={{ color: "var(--text-4)", fontSize: 12, padding: "24px 0" }}>
+                  Sin datos disponibles para esta área en el período seleccionado.
+                </div>
+              )}
             </>
           )}
 
@@ -1483,7 +1034,275 @@ export default function Cabina() {
 interface KpiColDef { id: string; label: string; getVal: (pais: string) => string; }
 
 
-type PnLRow = { kind: "sub" | "item"; label: string; id?: string; get: (pais: string) => string; sub?: (pais: string) => string };
+const BLK_OPERACIONES: AreaBloque[] = [
+  { titulo: "1. Comportamiento de compra", filas: [
+    { id: "KPI-OPE-001", label: "Ticket promedio", campo: "ticket_promedio", modo: "money", dir: "up" },
+    { id: "KPI-OPE-002", label: "Piezas por ticket", campo: "pzas_por_ticket", unidad: "Piezas", dir: "up" },
+    { id: "KPI-OPE-003", label: "Conversión", campo: "conversion", modo: "pct", unidad: "%", dir: "up" },
+    { id: "KPI-OPE-004", label: "Clientes (tickets)", campo: "clientes", unidad: "Conteo", dir: "up" },
+    { id: "KPI-OPE-005", label: "Venta adicional", campo: "venta_adicional", modo: "dec2", dir: "up" },
+  ]},
+  { titulo: "2. Desempeño comercial", filas: [
+    { id: "KPI-OPE-006", label: "Venta promedio por tienda", campo: "venta_promedio_tienda", modo: "money", dir: "up" },
+    { id: "KPI-OPE-007", label: "Cumplimiento de presupuesto", campo: "cumplimiento_presupuesto", modo: "pct", unidad: "%", sub: true, dir: "up" },
+    { id: "KPI-OPE-008", label: "Mejor región vs presupuesto", campo: "mejor_region_vs_presupuesto" },
+    { id: "KPI-OPE-009", label: "Peor región vs presupuesto", campo: "peor_region_vs_presupuesto" },
+  ]},
+  { titulo: "3. Calidad de tienda", filas: [
+    { id: "KPI-OPE-010", label: "Calificación de checklist", campo: "calificacion_de_checklist", modo: "dec2", unidad: "Puntos", dir: "up" },
+    { id: "KPI-OPE-011", label: "Calificación trade tiendas", campo: "calificacion_trade_tiendas", modo: "dec2", unidad: "Puntos", dir: "up" },
+    { id: "KPI-OPE-012", label: "SKUs sin exhibir", campo: "skus_sin_exhibir", modo: "pct", unidad: "%", dir: "down" },
+    { id: "KPI-OPE-013", label: "Cumplimiento 36 hrs", campo: "36_hrs", modo: "pct", unidad: "%", dir: "up" },
+  ]},
+  { titulo: "4. Control y compensación", filas: [
+    { id: "KPI-OPE-014", label: "% Ajustes (devoluciones)", campo: "porc_ajustes", modo: "pct", unidad: "%", dir: "down" },
+    { id: "KPI-OPE-015", label: "% Faltante de inventarios", campo: "pct_faltante_inventarios", modo: "pct", unidad: "%", dir: "down" },
+    { id: "KPI-OPE-016", label: "Tickets mesa de control", campo: "tickets_mesa_de_control", unidad: "Conteo", dir: "up" },
+    { id: "KPI-OPE-017", label: "% De comisiones", campo: "pct_de_comisiones", modo: "pct", unidad: "%" },
+    { id: "KPI-OPE-018", label: "% Tiendas que cobraron bono", campo: "pct_de_tiendas_cobraron_bono_mas_del_50pct", modo: "pct", unidad: "%", dir: "up" },
+    { id: "KPI-OPE-019", label: "On time entregas almacén-tienda", campo: "on_time_de_entregas_almacen_a_tiendas", modo: "pct", unidad: "%", dir: "up" },
+  ]},
+];
+const BLK_COMERCIAL: AreaBloque[] = [
+  { titulo: "1. Precio y rotación", filas: [
+    { id: "KPI-COM-001", label: "Precio promedio", campo: "precio_promedio", modo: "money" },
+    { id: "KPI-COM-005", label: "Sell-thru general", campo: "sell_thru_general", modo: "pct", unidad: "%", sub: true, dir: "up" },
+    { id: "KPI-COM-006", label: "Sell-thru general año anterior", campo: "sell_thru_general_ano_anterior", modo: "pct", unidad: "%", dir: "up" },
+    { id: "KPI-COM-007", label: "% Venta producción nacional", campo: "pct_de_venta_produccion_nacional", modo: "pct", unidad: "%", dir: "up" },
+  ]},
+  { titulo: "2. Rebajas y descuentos", filas: [
+    { id: "KPI-COM-002", label: "Stock en rebajas", campo: "stock_rebajas_pct_descuentos", modo: "pct", unidad: "%", dir: "down" },
+    { id: "KPI-COM-003", label: "Piezas en rebajas", campo: "piezas_rebajas_pct_descuentos", modo: "pct", unidad: "%", dir: "down" },
+    { id: "KPI-COM-004", label: "Venta en rebajas", campo: "venta_rebajas_pct_descuentos", modo: "pct", unidad: "%", dir: "down" },
+  ]},
+  { titulo: "3. Surtido y stock por tienda", filas: [
+    { id: "KPI-COM-008", label: "Promedio SKUs en tiendas", campo: "promedio_skus_en_tiendas", unidad: "Conteo" },
+    { id: "KPI-COM-009", label: "Promedio SKUs en almacén", campo: "promedio_skus_en_almacen", unidad: "Conteo" },
+    { id: "KPI-COM-010", label: "SKUs con menos de 3 pzas en CEDIS", campo: "sku_menos_de_3_piezas_en_cedis", unidad: "Conteo" },
+    { id: "KPI-COM-011", label: "SKUs con menos de 3 pzas en tiendas", campo: "skus_menos_de_3_piezas_en_tiendas", unidad: "Conteo" },
+    { id: "KPI-COM-012", label: "Stock promedio por tienda", campo: "stock_promedio_x_tienda_piezas", unidad: "Piezas" },
+    { id: "KPI-COM-013", label: "Stock promedio por tienda", campo: "stock_promedio_x_tienda_dinero", modo: "money" },
+  ]},
+];
+const BLK_LOGISTICA: AreaBloque[] = [
+  { titulo: "1. Inventario en piezas", filas: [
+    { id: "KPI-LOG-001", label: "Inventario CEDIS disponible", campo: "inv_cedis_disponible", unidad: "Piezas" },
+    { id: "KPI-LOG-013", label: "Inventario disponible SAP", campo: "inv_disponible_sap", unidad: "Piezas" },
+    { id: "KPI-LOG-014", label: "Inventario tiendas", campo: "inv_tdas", unidad: "Piezas" },
+    { id: "KPI-LOG-015", label: "Inventario tránsito a tiendas", campo: "inv_transito_tdas", unidad: "Piezas" },
+    { id: "KPI-LOG-030", label: "Inventario CEDIS no disponible", campo: "inv_cedis_no_disponible", unidad: "Piezas", dir: "down" },
+    { id: "KPI-LOG-012", label: "Inventario en China", campo: "inventario_en_china_piezas", unidad: "Piezas", dir: "up" },
+    { id: "KPI-LOG-017", label: "Inventario en tránsito", campo: "inventario_en_transito_piezas", unidad: "Piezas", dir: "up" },
+    { id: "KPI-LOG-016", label: "Inventario no disponible en aduana", campo: "inventario_no_disponible_en_aduana_piezas", unidad: "Piezas", dir: "down" },
+    { id: "KPI-LOG-018", label: "Inventario no disponible país", campo: "inventario_no_disponible_pais_piezas", unidad: "Piezas", dir: "down" },
+    { id: "KPI-LOG-035", label: "Inv. liberado pendiente de zarpar", campo: "inventario_liberado_pendiente_de_zarpar_piezas", unidad: "Piezas", dir: "up" },
+  ]},
+  { titulo: "2. Cobertura en meses", filas: [
+    { id: "KPI-LOG-019", label: "Total inventario", campo: "total_inventario_meses", modo: "dec2", unidad: "Meses", sub: true, dir: "up" },
+    { id: "KPI-LOG-020", label: "Inventario tiendas", campo: "inventario_tiendas_meses", modo: "dec2", unidad: "Meses", dir: "up" },
+    { id: "KPI-LOG-021", label: "Inventario tránsito a tiendas", campo: "inventario_transito_tiendas_meses", modo: "dec2", unidad: "Meses", dir: "up" },
+    { id: "KPI-LOG-022", label: "Inventario CEDIS disponible", campo: "inventario_cedis_disponible_meses", unidad: "Meses", dir: "up" },
+    { id: "KPI-LOG-036", label: "Inventario CEDIS no disponible", campo: "inventario_cedis_no_disponible_meses", unidad: "Meses", dir: "down" },
+    { id: "KPI-LOG-023", label: "Inventario no disponible en aduana", campo: "inventario_no_disponible_en_aduana_meses", modo: "dec2", unidad: "Meses", dir: "down" },
+    { id: "KPI-LOG-024", label: "Inventario en tránsito", campo: "inventario_en_transito_meses", modo: "dec2", unidad: "Meses", dir: "up" },
+    { id: "KPI-LOG-025", label: "Inv. liberado pendiente de zarpar", campo: "inventario_liberado_pendiente_de_zarpar_meses", modo: "dec2", unidad: "Meses", dir: "up" },
+    { id: "KPI-LOG-026", label: "Inventario no disponible país", campo: "inventario_no_disponible_pais_meses", modo: "dec2", unidad: "Meses", dir: "down" },
+    { id: "KPI-LOG-027", label: "Inventario en China", campo: "inventario_en_china_meses", modo: "dec2", unidad: "Meses", dir: "up" },
+  ]},
+  { titulo: "3. Nivel de servicio", filas: [
+    { id: "KPI-LOG-003", label: "Fill rate de entrega a tienda", campo: "pct_de_surtimiento_fill_rate_de_entrega_a_tienda", modo: "pct", unidad: "%", sub: true, dir: "up" },
+    { id: "KPI-LOG-004", label: "OTP15", campo: "otp15", modo: "pct", unidad: "%", dir: "up" },
+    { id: "KPI-LOG-005", label: "Total piezas surtidas a tiendas", campo: "total_piezas_surtidas_a_tiendas", unidad: "Piezas", dir: "up" },
+    { id: "KPI-LOG-006", label: "Promedio almacenaje por semana", campo: "promedio_almacenaje_por_semana", unidad: "Piezas" },
+    { id: "KPI-LOG-037", label: "Productividad por persona (surtido)", campo: "productividad_x_persona_surtido", unidad: "Piezas", dir: "up" },
+  ]},
+  { titulo: "4. Costo por pieza", filas: [
+    { id: "KPI-LOG-007", label: "Costo por pieza — etiquetado", campo: "costo_por_pieza_etiquetado", modo: "dec2", dir: "down" },
+    { id: "KPI-LOG-008", label: "Costo por pieza — almacenada", campo: "costo_por_pieza_almacenada", modo: "dec2", dir: "down" },
+    { id: "KPI-LOG-009", label: "Costo por pieza — surtida", campo: "costo_por_pieza_surtida", modo: "dec2", dir: "down" },
+    { id: "KPI-LOG-010", label: "Costo por pieza — distribución", campo: "costo_por_pieza_distribucion", modo: "dec2", dir: "down" },
+    { id: "KPI-LOG-002", label: "% Gasto distribución vs venta", campo: "pct_de_gasto_distribucion_vs_la_venta_distribucion", modo: "pct", unidad: "%", dir: "down" },
+  ]},
+  { titulo: "5. Capacidad y obsolescencia", filas: [
+    { id: "KPI-LOG-011", label: "% De carga en CEDIS", campo: "porc_carga_cedis", modo: "pctd", unidad: "%" },
+    { id: "KPI-LOG-038", label: "Inv. CEDIS lento movimiento +180 días", campo: "inventario_cedis_lento_movimiento_mas_de_180_dias", unidad: "Piezas", dir: "down" },
+  ]},
+];
+const BLK_MARKETING: AreaBloque[] = [
+  { titulo: "1. Tráfico", filas: [
+    { id: "KPI-MKT-001", label: "Visitas a tiendas", campo: "visitas_tdas", unidad: "Conteo", sub: true, dir: "up" },
+    { id: "KPI-MKT-002", label: "Sensores tiendas — mes actual", campo: "sensores_tdas_actual", unidad: "Conteo" },
+    { id: "KPI-MKT-003", label: "Sensores tiendas — año anterior", campo: "sensores_tdas_pasado", unidad: "Conteo" },
+    { id: "KPI-MKT-004", label: "% Aumento de tráfico vs AA", campo: "porc_aumento_trafico", modo: "pct", unidad: "%", dir: "up" },
+  ]},
+  { titulo: "2. Programa de lealtad", filas: [
+    { id: "KPI-MKT-005", label: "Tickets MinisoLove", campo: "tickets_minisolove", unidad: "Conteo", dir: "up" },
+    { id: "KPI-MKT-006", label: "Tickets totales", campo: "tickets_totales", unidad: "Conteo", dir: "up" },
+    { id: "KPI-MKT-007", label: "% Participación tickets MinisoLove", campo: "pct_participacion_tickets_minisolove", modo: "pct", unidad: "%", sub: true, dir: "up" },
+    { id: "KPI-MKT-008", label: "% Participación ventas MinisoLove", campo: "pct_participacion_ventas_minisolove", modo: "pct", unidad: "%", dir: "up" },
+    { id: "KPI-MKT-009", label: "Registros nuevos loyalty", campo: "registros_nuevos_loyalty", unidad: "Conteo", dir: "up" },
+  ]},
+  { titulo: "3. Retención de clientes", filas: [
+    { id: "KPI-MKT-010", label: "Frecuencia de compra top loyalty", campo: "frecuencia_de_compra_de_los_clientes_top_loyalty", modo: "dec2", unidad: "Veces", dir: "up" },
+    { id: "KPI-MKT-011", label: "Clientes con +1 compra en 180 días", campo: "clientes_con_mas_de_1_compra_en_180_dias", unidad: "Conteo", dir: "up" },
+    { id: "KPI-MKT-012", label: "Clientes con +2 compras en 180 días", campo: "clientes_con_mas_de_2_compras_en_180_dias", unidad: "Conteo", dir: "up" },
+  ]},
+  { titulo: "4. Redención de puntos", filas: [
+    { id: "KPI-MKT-013", label: "Puntos redimidos POS", campo: "ptos_redimidos_pos", unidad: "Conteo" },
+    { id: "KPI-MKT-014", label: "Puntos redimidos e-commerce", campo: "ptos_redimidos_ecomm", unidad: "Conteo" },
+    { id: "KPI-MKT-015", label: "Puntos redimidos app", campo: "ptos_redimidos_app", unidad: "Conteo" },
+    { id: "KPI-MKT-016", label: "Monto de puntos redimidos", campo: "monto_redimidos_loy_", modo: "money" },
+    { id: "KPI-MKT-017", label: "% Redención vs venta total", campo: "porc_redencion_venta", modo: "pct", unidad: "%", dir: "up" },
+  ]},
+  { titulo: "5. Alcance", filas: [
+    { id: "KPI-MKT-018", label: "Ventas totales marketing", campo: "ventas_total_marketing", modo: "money", dir: "up" },
+    { id: "KPI-MKT-019", label: "Top de POS del mes", campo: "top_de_pos_mes_correspondiente" },
+    { id: "KPI-MKT-020", label: "Personas alcanzadas en redes (top 5)", campo: "personas_alcanzadas_en_top_5_interacciones_redes_sociales", unidad: "Conteo" },
+  ]},
+];
+const BLK_RRHH: AreaBloque[] = [
+  { titulo: "1. Rotación", filas: [
+    { id: "KPI-RH-001", label: "Rotación corporativo", campo: "rotacion_corporativo", modo: "pct", unidad: "%", dir: "down" },
+    { id: "KPI-RH-002", label: "Rotación operativa almacén", campo: "rotacion_operativa_almacen", modo: "pct", unidad: "%", dir: "down" },
+    { id: "KPI-RH-003", label: "Rotación maquila almacén", campo: "rotacion_maquila_almacen", modo: "pct", unidad: "%", dir: "down" },
+    { id: "KPI-RH-004", label: "Rotación general tiendas", campo: "rotacion_general_tiendas", modo: "pct", unidad: "%", sub: true, dir: "down" },
+    { id: "KPI-RH-005", label: "Rotación gerentes tiendas", campo: "rotacion_gerentes_tiendas", modo: "pct", unidad: "%", dir: "down" },
+  ]},
+  { titulo: "2. Bajas y plantilla activa", filas: [
+    { id: "KPI-RH-006", label: "Bajas del mes — corporativo", campo: "numero_de_bajas_del_mes_en_el_corporativo", unidad: "Conteo", dir: "down" },
+    { id: "KPI-RH-007", label: "Activos promedio — corporativo", campo: "numero_promedio_de_activos_en_el_corporativo_al_mes", unidad: "Conteo" },
+    { id: "KPI-RH-008", label: "Bajas del mes — almacén operativo", campo: "numero_de_bajas_del_mes_en_la_parte_operativa_del_almacen", unidad: "Conteo", dir: "down" },
+    { id: "KPI-RH-009", label: "Activos promedio — almacén operativo", campo: "numero_promedio_de_activos_en_la_parte_operativa_del_almacen_del_mes", unidad: "Conteo" },
+    { id: "KPI-RH-010", label: "Bajas del mes — maquila almacén", campo: "numero_de_bajas_del_mes_en_la_parte_maquila_del_almacen", unidad: "Conteo", dir: "down" },
+    { id: "KPI-RH-011", label: "Activos promedio — maquila almacén", campo: "numero_promedio_de_activos_en_la_parte_maquila_del_almacen_del_mes", unidad: "Conteo" },
+    { id: "KPI-RH-012", label: "Bajas del mes — tiendas", campo: "numero_de_bajas_del_mes_en_general_tiendas", unidad: "Conteo", dir: "down" },
+    { id: "KPI-RH-013", label: "Activos promedio — tiendas", campo: "numero_promedio_de_activos_en_general_tiendas_del_mes", unidad: "Conteo" },
+    { id: "KPI-RH-014", label: "Bajas del mes — gerentes tienda", campo: "numero_de_bajas_del_mes_en_gerente_tiendas", unidad: "Conteo", dir: "down" },
+    { id: "KPI-RH-015", label: "Activos promedio — gerentes tienda", campo: "numero_promedio_de_activos_en_gerente_tiendas_del_mes", unidad: "Conteo" },
+  ]},
+  { titulo: "3. Headcount y costo", filas: [
+    { id: "KPI-RH-016", label: "Head count corporativo", campo: "head_count_corpo", unidad: "Conteo" },
+    { id: "KPI-RH-017", label: "Head cost corporativo", campo: "head_cost_corpo", modo: "money" },
+    { id: "KPI-RH-018", label: "Head count almacén", campo: "head_count_alancen", unidad: "Conteo" },
+    { id: "KPI-RH-019", label: "Head cost almacén", campo: "head_cost_almacen", modo: "money" },
+    { id: "KPI-RH-020", label: "Head count tiendas", campo: "head_count_tiendas", unidad: "Conteo" },
+    { id: "KPI-RH-021", label: "Head cost tiendas", campo: "head_cost_tiendas", modo: "money" },
+    { id: "KPI-RH-022", label: "Promedio empleados por tienda", campo: "promedio_empleados_x_tienda", modo: "dec", unidad: "Conteo" },
+    { id: "KPI-RH-023", label: "Promedio empleados por venta", campo: "promedio_empleados_x_venta", unidad: "Conteo", dir: "up" },
+  ]},
+  { titulo: "4. Cobertura y contratación", filas: [
+    { id: "KPI-RH-024", label: "% Cobertura plantilla en tienda", campo: "pct_cobertura_plantilla_en_tienda", modo: "pct", unidad: "%", sub: true, dir: "up" },
+    { id: "KPI-RH-025", label: "% Cobertura plantilla en almacén", campo: "pct_cobertura_plantilla_en_almacen", modo: "pct", unidad: "%", dir: "up" },
+    { id: "KPI-RH-026", label: "% Cobertura interna gerenciales", campo: "pct_cobertura_interna_gerenciales", modo: "pct", unidad: "%", dir: "up" },
+    { id: "KPI-RH-027", label: "Vacantes gerente", campo: "numero_de_vacantes_gerente", unidad: "Conteo", dir: "down" },
+    { id: "KPI-RH-028", label: "Vacantes subgerente", campo: "numero_de_vacantes_subgerente", unidad: "Conteo", dir: "down" },
+    { id: "KPI-RH-029", label: "Promociones a gerente", campo: "numero_de_promocion_gerente", unidad: "Conteo", dir: "up" },
+    { id: "KPI-RH-030", label: "Promociones a subgerente", campo: "numero_de_promocion_subgerente", unidad: "Conteo", dir: "up" },
+    { id: "KPI-RH-031", label: "Tiempo contratación — gerenciales", campo: "tiempo_promedio_contratacion_tiendas_gerenciales", modo: "dec", unidad: "Días", dir: "down" },
+    { id: "KPI-RH-032", label: "Tiempo contratación — promotores", campo: "tiempo_promedio_contratacion_tiendas_promotores", modo: "dec", unidad: "Días", dir: "down" },
+    { id: "KPI-RH-033", label: "Retención de personal antes de 90 días", campo: "retencion_de_personal_tienda_antes_de_90_dias", modo: "pct", unidad: "%", dir: "up" },
+  ]},
+  { titulo: "5. Compensación variable", filas: [
+    { id: "KPI-RH-034", label: "Alcance comisión real — promotor", campo: "alcance_de_comision_real_mensual_promotor", modo: "money" },
+    { id: "KPI-RH-035", label: "Target proyectado — promotor", campo: "target_proyectado_para_promotor", modo: "money" },
+    { id: "KPI-RH-036", label: "% Alcance comp. variable — promotores", campo: "pct_alcance_de_compensacion_variable_promotores", modo: "pct", unidad: "%", sub: true },
+    { id: "KPI-RH-037", label: "Alcance comisión real — subgerente", campo: "alcance_de_comision_real_mensual_subgerente", modo: "money" },
+    { id: "KPI-RH-038", label: "Target proyectado — subgerente", campo: "target_proyectado_para_subgerente", modo: "money" },
+    { id: "KPI-RH-039", label: "% Alcance comp. variable — subgerentes", campo: "pct_alcance_de_compensacion_variable_subgerentes", modo: "pct", unidad: "%", sub: true },
+    { id: "KPI-RH-040", label: "Alcance comisión real — gerente", campo: "alcance_de_comision_real_mensual_gerente", modo: "money" },
+    { id: "KPI-RH-041", label: "Target proyectado — gerente", campo: "target_proyectado_para_gerente", modo: "money" },
+    { id: "KPI-RH-042", label: "% Alcance comp. variable — gerentes", campo: "pct_alcance_de_compensacion_variable_gerentes", modo: "pct", unidad: "%", sub: true },
+  ]},
+  { titulo: "6. Clima", filas: [
+    { id: "KPI-RH-043", label: "Calificación satisfacción compañía", campo: "calificacion_satisfaccion_compania", modo: "dec2", unidad: "Puntos", dir: "up" },
+  ]},
+];
+const BLK_AUDITORIA: AreaBloque[] = [
+  { titulo: "1. Merma y robo", filas: [
+    { id: "KPI-AUD-001", label: "Robo tiendas", campo: "robo_tdas", modo: "pct", unidad: "% s/ venta", sub: true, dir: "down" },
+    { id: "KPI-AUD-002", label: "Merma tiendas", campo: "merma_tdas", modo: "pct", unidad: "% s/ venta", dir: "down" },
+    { id: "KPI-AUD-003", label: "Caducados tienda", campo: "caducados_tdas", modo: "pct", unidad: "% s/ venta", dir: "down" },
+  ]},
+  { titulo: "2. Eventos de seguridad", filas: [
+    { id: "KPI-AUD-004", label: "Eventos farderos", campo: "eventos_farderos", unidad: "Conteo" },
+    { id: "KPI-AUD-005", label: "Eventos robo interno", campo: "eventos_robo_interno", unidad: "Conteo", dir: "down" },
+    { id: "KPI-AUD-006", label: "Robo de camión", campo: "robo_de_camion", unidad: "Conteo", dir: "down" },
+  ]},
+];
+
+type AreaFila = { id: string; label: string; campo: string; modo?: string; unidad?: string; sub?: boolean; dir?: string };
+type AreaBloque = { titulo: string; filas: AreaFila[] };
+type Celda = { main: string; sec: string; col: string };
+
+function AreaTable({ paises, bloques, cell }: {
+  paises: readonly string[]; bloques: AreaBloque[]; cell: (p: string, f: AreaFila) => Celda;
+}) {
+  return (
+    <div style={{ maxWidth: 300 + paises.length * 165 }}>
+      {bloques.map((b, bi) => (
+        <div key={bi} style={{ marginTop: bi === 0 ? 4 : 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)", marginBottom: 5 }}>{b.titulo}</div>
+          <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
+              <thead>
+                <tr style={{ background: "var(--bg-2)" }}>
+                  <Th left width={290}>Concepto</Th>
+                  {paises.map((p) => (
+                    <th key={p} style={{ padding: "6px 12px", textAlign: "right", fontWeight: 500, color: "var(--text-3)", fontSize: 11 }}>
+                      <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em", marginRight: 5 }}>{p}</span>
+                      {NOMBRE[p]}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {b.filas.map((f) => (
+                  <tr key={f.id} style={{ background: f.sub ? "var(--bg-2)" : "var(--bg-0)", borderTop: "0.5px solid var(--border)" }}>
+                    <td style={{ padding: "4px 12px", lineHeight: 1.3, color: f.sub ? "var(--text-1)" : "var(--text-3)", fontWeight: f.sub ? 600 : 400 }}>
+                      {f.label}
+                      {f.unidad && <span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 5 }}>{f.unidad}</span>}
+                      <span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 6 }}>{f.id}</span>
+                    </td>
+                    {paises.map((p) => {
+                      const c = cell(p, f);
+                      return (
+                        <td key={p} style={{ padding: "4px 12px", textAlign: "right", lineHeight: 1.3, fontVariantNumeric: "tabular-nums" }}>
+                          <div style={{ fontWeight: f.sub ? 600 : 400, color: c.main === "—" ? "var(--text-4)" : f.sub ? "var(--text-1)" : "var(--text-2)" }}>{c.main}</div>
+                          {c.sec && <div style={{ fontSize: 9.5, color: c.col, marginTop: -1 }}>{c.sec}</div>}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SecToggle({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const ops = [["imp", "Importe"], ["var", "vs Año ant."], ["aa", "Año anterior"]];
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+      <span style={{ fontSize: 11, color: "var(--text-4)" }}>Línea secundaria</span>
+      <div style={{ display: "inline-flex", border: "0.5px solid var(--border)", borderRadius: 6, overflow: "hidden" }}>
+        {ops.map(([k, lbl], i) => (
+          <button key={k} onClick={() => onChange(k)} style={{
+            border: "none", borderLeft: i === 0 ? "none" : "0.5px solid var(--border)",
+            background: value === k ? "var(--bg-4)" : "transparent",
+            color: value === k ? "var(--text-1)" : "var(--text-3)",
+            fontSize: 11, padding: "4px 10px", cursor: "pointer",
+          }}>{lbl}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+type PnLRow = { kind: "sub" | "item"; label: string; id?: string; get: (pais: string) => string; sub?: (pais: string) => string; subCol?: (pais: string) => string };
 
 function PnLTable({ paises, rows }: { paises: readonly string[]; rows: PnLRow[] }) {
   return (
@@ -1536,7 +1355,7 @@ function PnLTable({ paises, rows }: { paises: readonly string[]; rows: PnLRow[] 
                         color: v === "—" ? "var(--text-4)" : isSub ? "var(--text-1)" : "var(--text-2)",
                       }}>{v}</div>
                       {sv && sv !== "—" && (
-                        <div style={{ fontSize: 9.5, color: "var(--text-4)", marginTop: -1 }}>{sv}</div>
+                        <div style={{ fontSize: 9.5, color: r.subCol ? r.subCol(p) : "var(--text-4)", marginTop: -1 }}>{sv}</div>
                       )}
                     </td>
                   );
