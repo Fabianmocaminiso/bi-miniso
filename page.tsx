@@ -418,6 +418,8 @@ export default function Cabina() {
   const [secMode, setSecMode] = useState<string>("imp");
   const [mvErr, setMvErr] = useState<Record<string, string>>({});
   const [mvCargando, setMvCargando] = useState<Record<string, boolean>>({});
+  const [recarga, setRecarga] = useState(0);
+  const MV_DE_AREA: Record<string, string> = { finanzas: "finanzas", operaciones: "operaciones", comercial: "comercial", logistica: "logistica", marketing: "marketing", rrhh: "rh", auditoria: "auditoria" };
   const [selPaises, setSelPaises] = useState<string[]>([...PAISES]);
   const paisesVis = PAISES.filter((p) => selPaises.includes(p));
   const togglePais = (p: string) => {
@@ -485,7 +487,7 @@ export default function Cabina() {
       .catch((e) => { if (vivo) setMvErr((prev) => ({ ...prev, [mv]: "No se pudo conectar: " + (e?.message || "error de red") })); })
       .finally(() => { if (vivo) setMvCargando((prev) => ({ ...prev, [mv]: false })); });
     return () => { vivo = false; };
-  }, [area, year, month]);
+  }, [area, year, month, recarga]);
 
   async function preguntarIA() {
     if (!pregunta.trim()) return;
@@ -533,6 +535,7 @@ export default function Cabina() {
   const logVal = (p: string, f: string, m?: string) => mv("logistica", p, f, m);
   const mktVal = (p: string, f: string, m?: string) => mv("marketing", p, f, m);
   const mvHas  = (n: string) => Object.keys(mvData[n] || {}).length > 0;
+  const cargandoArea = !!mvCargando[MV_DE_AREA[area] || ""];
 
   // Sprint 14 — comparativo contra el mismo mes del año anterior
   const crudo = (src: Record<string, Record<string, MvRow>>, mvName: string, pais: string, campo: string): number | null => {
@@ -694,17 +697,17 @@ export default function Cabina() {
           <SidePicker value={MESES[month - 1]} options={MESES} onChange={(v) => setMonth(MESES.indexOf(v) + 1)} />
           <SidePicker value={String(year)} options={["2024", "2025", "2026"]} onChange={(v) => setYear(Number(v))} />
           <button
-            onClick={load}
-            disabled={loading}
+            onClick={() => setRecarga((n) => n + 1)}
+            disabled={cargandoArea}
             style={{
               display: "block", margin: "4px 10px 0", width: "calc(100% - 20px)",
-              background: loading ? "var(--bg-4)" : "var(--red)",
+              background: cargandoArea ? "var(--bg-4)" : "var(--red)",
               border: "none", color: "#fff", fontSize: 11, fontWeight: 500,
-              padding: "5px 0", borderRadius: 5, cursor: loading ? "not-allowed" : "pointer",
+              padding: "5px 0", borderRadius: 5, cursor: cargandoArea ? "not-allowed" : "pointer",
               transition: "background 0.15s",
             }}
           >
-            {loading ? "…" : "↻ Aplicar"}
+            {cargandoArea ? "…" : "↻ Aplicar"}
           </button>
           <SideSep />
           <SideSection label="Países" />
