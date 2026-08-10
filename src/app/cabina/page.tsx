@@ -417,6 +417,7 @@ export default function Cabina() {
   const [mvDataAA, setMvDataAA] = useState<Record<string, Record<string, MvRow>>>({});
   const [secMode, setSecMode] = useState<string>("imp");
   const [mvErr, setMvErr] = useState<Record<string, string>>({});
+  const [mvCargando, setMvCargando] = useState<Record<string, boolean>>({});
   const [selPaises, setSelPaises] = useState<string[]>([...PAISES]);
   const paisesVis = PAISES.filter((p) => selPaises.includes(p));
   const togglePais = (p: string) => {
@@ -533,19 +534,20 @@ export default function Cabina() {
     };
     const mv = MVAREA[area];
     if (!mv) return;
+    let vivo = true;
+    setMvCargando((prev) => ({ ...prev, [mv]: true }));
     fetch(`/api/mv?area=${mv}&year=${year}&month=${month}`)
       .then((r) => r.json())
       .then((d) => {
+        if (!vivo) return;
         if (!d.ok) { setMvErr((prev) => ({ ...prev, [mv]: String(d.error || "error") })); return; }
         setMvErr((prev) => ({ ...prev, [mv]: "" }));
         setMvData((prev) => ({ ...prev, [mv]: d.data || {} }));
         setMvMes((prev) => ({ ...prev, [mv]: d.periodoUsado || "" }));
       })
-      .catch(() => {});
-    fetch(`/api/mv?area=${mv}&year=${year - 1}&month=${month}`)
-      .then((r) => r.json())
-      .then((d) => { if (d.ok) setMvDataAA((prev) => ({ ...prev, [mv]: d.data || {} })); })
-      .catch(() => {});
+      .catch((e) => { if (vivo) setMvErr((prev) => ({ ...prev, [mv]: "No se pudo conectar: " + (e?.message || "error de red") })); })
+      .finally(() => { if (vivo) setMvCargando((prev) => ({ ...prev, [mv]: false })); });
+    return () => { vivo = false; };
   }, [area, year, month]);
 
   async function preguntarIA() {
@@ -626,6 +628,23 @@ export default function Cabina() {
     const bueno = dir === "up" ? d >= 0 : d <= 0;
     return bueno ? "var(--green)" : "var(--rose)";
   };
+  // el año anterior solo se consulta cuando el interruptor lo pide
+  useEffect(() => {
+    if (secMode === "imp") return;
+    const MVAREA2: Record<string, string> = {
+      finanzas: "finanzas", operaciones: "operaciones", comercial: "comercial",
+      logistica: "logistica", marketing: "marketing", rrhh: "rh", auditoria: "auditoria",
+    };
+    const mv = MVAREA2[area];
+    if (!mv || mvDataAA[mv]) return;
+    let vivo = true;
+    fetch(`/api/mv?area=${mv}&year=${year - 1}&month=${month}`)
+      .then((r) => r.json())
+      .then((d) => { if (vivo && d.ok) setMvDataAA((prev) => ({ ...prev, [mv]: d.data || {} })); })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, [area, year, month, secMode]);
+
   const avisoArea = (mvName: string, etiqueta: string) => {
     const err = mvErr[mvName];
     if (err) {
@@ -642,7 +661,7 @@ export default function Cabina() {
         </div>
       );
     }
-    if (loading && !mvHas(mvName)) {
+    if (mvCargando[mvName] && !mvHas(mvName)) {
       return <div style={{ fontSize: 11, color: "var(--text-4)", marginBottom: 10 }}>Cargando {etiqueta}…</div>;
     }
     if (!mvHas(mvName)) {
