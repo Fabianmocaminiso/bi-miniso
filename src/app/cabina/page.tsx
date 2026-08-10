@@ -607,6 +607,8 @@ export default function Cabina() {
     const n = Number(v);
     return Number.isNaN(n) ? null : n;
   };
+  const fmtPctS = (v: number | null): string =>
+    v == null ? "—" : (Math.abs(v) > 0 && Math.abs(v) < 1 ? v.toFixed(2) + "%" : fmtPct(v));
   const fmtModo = (v: number | null, modo?: string): string => {
     if (v == null) return "—";
     if (modo === "pct")   return fmtPct(v * 100);
@@ -632,10 +634,15 @@ export default function Cabina() {
     if (secMode === "var") {
       if (cur == null || aa == null) return { main, sec: "", col: "var(--text-4)" };
       const esPct = f.modo === "pct" || f.modo === "pctd";
+      if (f.unidad === "Conteo") {
+        const du = cur - aa;
+        const t = (du >= 0 ? "+" : "") + fmtNum(Math.abs(du) < 1 ? du : Math.round(du));
+        return { main, sec: t, col: colorVar(du, f.dir) };
+      }
       let d: number;
       if (esPct) d = f.modo === "pct" ? (cur - aa) * 100 : cur - aa;
       else { if (aa === 0) return { main, sec: "", col: "var(--text-4)" }; d = (cur - aa) / Math.abs(aa) * 100; }
-      const txt = (d >= 0 ? "+" : "") + d.toFixed(1) + (esPct ? " pts" : "%");
+      const txt = (d >= 0 ? "+" : "") + (Math.abs(d) > 0 && Math.abs(d) < 1 ? d.toFixed(2) : d.toFixed(1)) + (esPct ? " pts" : "%");
       return { main, sec: txt, col: colorVar(d, f.dir) };
     }
     return { main, sec: "", col: "var(--text-4)" };
@@ -756,14 +763,14 @@ export default function Cabina() {
                   const venta = g("fact_total");
                   const cv = a("costo_venta");
                   const ca = a("costo_almacen");
-                  const ct = a("costo_total") ?? ((cv ?? 0) + (ca ?? 0));
-                  const ub = venta == null ? null : venta - ct;
+                  const ct = a("costo_total") ?? ((cv == null && ca == null) ? null : (cv ?? 0) + (ca ?? 0));
+                  const ub = (venta == null || ct == null) ? null : venta - ct;
                   const nomOp = a("gasto_nomina_operativa");
                   const ocup = a("gasto_ocupacion");
                   const dist = a("gasto_operativo_distribucion");
                   const gOp = a("gasto_operativo");
                   const tgo = a("total_gasto_operacion") ?? gOp;
-                  const eTda = ub == null ? null : ub - (tgo ?? 0);
+                  const eTda = (ub == null || tgo == null) ? null : ub - tgo;
                   const gc = a("gasto_corporativo_gestion");
                   const oc = g("otro_gasto_ingreso_corporativo");
                   const eDiv = eTda == null ? null : eTda - (gc ?? 0) + (oc ?? 0);
@@ -783,10 +790,10 @@ export default function Cabina() {
                   const aa: any = V(p, mvDataAA);
                   const pc = (cur[k] == null || !cur.venta) ? null : cur[k] / cur.venta * 100;
                   const pa = (aa[k] == null || !aa.venta)   ? null : aa[k] / aa.venta * 100;
-                  if (secMode === "aa") return pa == null ? "" : fmtPct(pa);
+                  if (secMode === "aa") return pa == null ? "" : fmtPctS(pa);
                   if (pc == null || pa == null) return "";
                   const d = pc - pa;
-                  return (d >= 0 ? "+" : "") + d.toFixed(1) + " pts";
+                  return (d >= 0 ? "+" : "") + (Math.abs(d) > 0 && Math.abs(d) < 1 ? d.toFixed(2) : d.toFixed(1)) + " pts";
                 };
                 const pnlCol = (p: string, k: string, dir: string): string => {
                   if (secMode !== "var") return "var(--text-4)";
@@ -795,6 +802,12 @@ export default function Cabina() {
                   const pa = (aa[k] == null || !aa.venta)   ? null : aa[k] / aa.venta * 100;
                   if (pc == null || pa == null) return "var(--text-4)";
                   return colorVar(pc - pa, dir);
+                };
+                const ventaCol = (p: string): string => {
+                  if (secMode !== "var") return "var(--text-4)";
+                  const c = V(p).venta, a = V(p, mvDataAA).venta;
+                  if (c == null || a == null || a === 0) return "var(--text-4)";
+                  return colorVar((c - a) / Math.abs(a) * 100, "up");
                 };
                 const ventaSec = (p: string): string => {
                   if (secMode === "imp") return "";
@@ -805,25 +818,25 @@ export default function Cabina() {
                   return (d >= 0 ? "+" : "") + d.toFixed(1) + "%";
                 };
                 const rows: PnLRow[] = [
-                  { kind: "sub", label: "Facturación Total", id: "KPI-FIN-001", get: p => money(V(p).venta), sub: p => ventaSec(p) },
-                  { kind: "item", label: "Costo de ventas", id: "KPI-FIN-006", get: p => { const v: any = V(p); return (v.cv == null || !v.venta) ? "—" : fmtPct(v.cv / v.venta * 100); }, sub: p => pnlSec(p, "cv", true), subCol: p => pnlCol(p, "cv", "down") },
-                  { kind: "item", label: "Costo de almacén", id: "KPI-FIN-008", get: p => { const v: any = V(p); return (v.ca == null || !v.venta) ? "—" : fmtPct(v.ca / v.venta * 100); }, sub: p => pnlSec(p, "ca", true), subCol: p => pnlCol(p, "ca", "down") },
-                  { kind: "item", label: "Nómina de almacén", id: "KPI-FIN-010", get: p => { const v: any = V(p); return (v.nomAlm == null || !v.venta) ? "—" : fmtPct(v.nomAlm / v.venta * 100); }, sub: p => pnlSec(p, "nomAlm", true), subCol: p => pnlCol(p, "nomAlm", "down") },
-                  { kind: "item", label: "Costo total", id: "KPI-FIN-012", get: p => { const v: any = V(p); return (v.ct == null || !v.venta) ? "—" : fmtPct(v.ct / v.venta * 100); }, sub: p => pnlSec(p, "ct", true), subCol: p => pnlCol(p, "ct", "down") },
-                  { kind: "sub", label: "Utilidad Bruta", id: "KPI-FIN-014", get: p => { const v: any = V(p); return (v.ub == null || !v.venta) ? "—" : fmtPct(v.ub / v.venta * 100); }, sub: p => pnlSec(p, "ub", false), subCol: p => pnlCol(p, "ub", "up") },
-                  { kind: "item", label: "Nómina operativa", id: "KPI-FIN-018", get: p => { const v: any = V(p); return (v.nomOp == null || !v.venta) ? "—" : fmtPct(v.nomOp / v.venta * 100); }, sub: p => pnlSec(p, "nomOp", true), subCol: p => pnlCol(p, "nomOp", "down") },
-                  { kind: "item", label: "Gastos de ocupación", id: "KPI-FIN-020", get: p => { const v: any = V(p); return (v.ocup == null || !v.venta) ? "—" : fmtPct(v.ocup / v.venta * 100); }, sub: p => pnlSec(p, "ocup", true), subCol: p => pnlCol(p, "ocup", "down") },
-                  { kind: "item", label: "Gasto de distribución", id: "KPI-FIN-022", get: p => { const v: any = V(p); return (v.dist == null || !v.venta) ? "—" : fmtPct(v.dist / v.venta * 100); }, sub: p => pnlSec(p, "dist", true), subCol: p => pnlCol(p, "dist", "down") },
-                  { kind: "item", label: "Otros gastos operativos", id: "KPI-FIN-016", get: p => { const v: any = V(p); return (v.gOp == null || !v.venta) ? "—" : fmtPct(v.gOp / v.venta * 100); }, sub: p => pnlSec(p, "gOp", true), subCol: p => pnlCol(p, "gOp", "down") },
-                  { kind: "item", label: "Total gastos de operación", id: "KPI-FIN-023", get: p => { const v: any = V(p); return (v.tgo == null || !v.venta) ? "—" : fmtPct(v.tgo / v.venta * 100); }, sub: p => pnlSec(p, "tgo", true), subCol: p => pnlCol(p, "tgo", "down") },
-                  { kind: "sub", label: "EBITDA Tienda", id: "KPI-FIN-024", get: p => { const v: any = V(p); return (v.eTda == null || !v.venta) ? "—" : fmtPct(v.eTda / v.venta * 100); }, sub: p => pnlSec(p, "eTda", false), subCol: p => pnlCol(p, "eTda", "up") },
-                  { kind: "item", label: "Gasto corporativo", id: "KPI-FIN-026", get: p => { const v: any = V(p); return (v.gc == null || !v.venta) ? "—" : fmtPct(v.gc / v.venta * 100); }, sub: p => pnlSec(p, "gc", true), subCol: p => pnlCol(p, "gc", "down") },
-                  { kind: "item", label: "Otros gastos / ingresos", id: "KPI-FIN-029", get: p => { const v: any = V(p); return (v.oc == null || !v.venta) ? "—" : fmtPct(v.oc / v.venta * 100); }, sub: p => pnlSec(p, "oc", false), subCol: p => pnlCol(p, "oc", "") },
-                  { kind: "sub", label: "EBITDA División", id: "KPI-FIN-028", get: p => { const v: any = V(p); return (v.eDiv == null || !v.venta) ? "—" : fmtPct(v.eDiv / v.venta * 100); }, sub: p => pnlSec(p, "eDiv", false), subCol: p => pnlCol(p, "eDiv", "up") },
-                  { kind: "item", label: "Depreciación y amortización", id: "KPI-FIN-032", get: p => { const v: any = V(p); return (v.da == null || !v.venta) ? "—" : fmtPct(v.da / v.venta * 100); }, sub: p => pnlSec(p, "da", true), subCol: p => pnlCol(p, "da", "down") },
-                  { kind: "item", label: "Gasto financiero", id: "KPI-FIN-031", get: p => { const v: any = V(p); return (v.gf == null || !v.venta) ? "—" : fmtPct(v.gf / v.venta * 100); }, sub: p => pnlSec(p, "gf", true), subCol: p => pnlCol(p, "gf", "down") },
-                  { kind: "item", label: "Impuestos", id: "KPI-FIN-033", get: p => { const v: any = V(p); return (v.imp == null || !v.venta) ? "—" : fmtPct(v.imp / v.venta * 100); }, sub: p => pnlSec(p, "imp", true), subCol: p => pnlCol(p, "imp", "down") },
-                  { kind: "sub", label: "Utilidad Neta", id: "KPI-FIN-034", get: p => { const v: any = V(p); return (v.un == null || !v.venta) ? "—" : fmtPct(v.un / v.venta * 100); }, sub: p => pnlSec(p, "un", false), subCol: p => pnlCol(p, "un", "up") },
+                  { kind: "sub", label: "Facturación Total", id: "KPI-FIN-001", get: p => money(V(p).venta), sub: p => ventaSec(p), subCol: p => ventaCol(p) },
+                  { kind: "item", label: "Costo de ventas", id: "KPI-FIN-006", get: p => { const v: any = V(p); return (v.cv == null || !v.venta) ? "—" : fmtPctS(v.cv / v.venta * 100); }, sub: p => pnlSec(p, "cv", true), subCol: p => pnlCol(p, "cv", "down") },
+                  { kind: "item", label: "Costo de almacén", id: "KPI-FIN-008", get: p => { const v: any = V(p); return (v.ca == null || !v.venta) ? "—" : fmtPctS(v.ca / v.venta * 100); }, sub: p => pnlSec(p, "ca", true), subCol: p => pnlCol(p, "ca", "down") },
+                  { kind: "item", label: "Nómina de almacén", id: "KPI-FIN-010", get: p => { const v: any = V(p); return (v.nomAlm == null || !v.venta) ? "—" : fmtPctS(v.nomAlm / v.venta * 100); }, sub: p => pnlSec(p, "nomAlm", true), subCol: p => pnlCol(p, "nomAlm", "down") },
+                  { kind: "item", label: "Costo total", id: "KPI-FIN-012", get: p => { const v: any = V(p); return (v.ct == null || !v.venta) ? "—" : fmtPctS(v.ct / v.venta * 100); }, sub: p => pnlSec(p, "ct", true), subCol: p => pnlCol(p, "ct", "down") },
+                  { kind: "sub", label: "Utilidad Bruta", id: "KPI-FIN-014", get: p => { const v: any = V(p); return (v.ub == null || !v.venta) ? "—" : fmtPctS(v.ub / v.venta * 100); }, sub: p => pnlSec(p, "ub", false), subCol: p => pnlCol(p, "ub", "up") },
+                  { kind: "item", label: "Nómina operativa", id: "KPI-FIN-018", get: p => { const v: any = V(p); return (v.nomOp == null || !v.venta) ? "—" : fmtPctS(v.nomOp / v.venta * 100); }, sub: p => pnlSec(p, "nomOp", true), subCol: p => pnlCol(p, "nomOp", "down") },
+                  { kind: "item", label: "Gastos de ocupación", id: "KPI-FIN-020", get: p => { const v: any = V(p); return (v.ocup == null || !v.venta) ? "—" : fmtPctS(v.ocup / v.venta * 100); }, sub: p => pnlSec(p, "ocup", true), subCol: p => pnlCol(p, "ocup", "down") },
+                  { kind: "item", label: "Gasto de distribución", id: "KPI-FIN-022", get: p => { const v: any = V(p); return (v.dist == null || !v.venta) ? "—" : fmtPctS(v.dist / v.venta * 100); }, sub: p => pnlSec(p, "dist", true), subCol: p => pnlCol(p, "dist", "down") },
+                  { kind: "item", label: "Otros gastos operativos", id: "KPI-FIN-016", get: p => { const v: any = V(p); return (v.gOp == null || !v.venta) ? "—" : fmtPctS(v.gOp / v.venta * 100); }, sub: p => pnlSec(p, "gOp", true), subCol: p => pnlCol(p, "gOp", "down") },
+                  { kind: "item", label: "Total gastos de operación", id: "KPI-FIN-023", get: p => { const v: any = V(p); return (v.tgo == null || !v.venta) ? "—" : fmtPctS(v.tgo / v.venta * 100); }, sub: p => pnlSec(p, "tgo", true), subCol: p => pnlCol(p, "tgo", "down") },
+                  { kind: "sub", label: "EBITDA Tienda", id: "KPI-FIN-024", get: p => { const v: any = V(p); return (v.eTda == null || !v.venta) ? "—" : fmtPctS(v.eTda / v.venta * 100); }, sub: p => pnlSec(p, "eTda", false), subCol: p => pnlCol(p, "eTda", "up") },
+                  { kind: "item", label: "Gasto corporativo", id: "KPI-FIN-026", get: p => { const v: any = V(p); return (v.gc == null || !v.venta) ? "—" : fmtPctS(v.gc / v.venta * 100); }, sub: p => pnlSec(p, "gc", true), subCol: p => pnlCol(p, "gc", "down") },
+                  { kind: "item", label: "Otros gastos / ingresos", id: "KPI-FIN-029", get: p => { const v: any = V(p); return (v.oc == null || !v.venta) ? "—" : fmtPctS(v.oc / v.venta * 100); }, sub: p => pnlSec(p, "oc", false), subCol: p => pnlCol(p, "oc", "") },
+                  { kind: "sub", label: "EBITDA División", id: "KPI-FIN-028", get: p => { const v: any = V(p); return (v.eDiv == null || !v.venta) ? "—" : fmtPctS(v.eDiv / v.venta * 100); }, sub: p => pnlSec(p, "eDiv", false), subCol: p => pnlCol(p, "eDiv", "up") },
+                  { kind: "item", label: "Depreciación y amortización", id: "KPI-FIN-032", get: p => { const v: any = V(p); return (v.da == null || !v.venta) ? "—" : fmtPctS(v.da / v.venta * 100); }, sub: p => pnlSec(p, "da", true), subCol: p => pnlCol(p, "da", "down") },
+                  { kind: "item", label: "Gasto financiero", id: "KPI-FIN-031", get: p => { const v: any = V(p); return (v.gf == null || !v.venta) ? "—" : fmtPctS(v.gf / v.venta * 100); }, sub: p => pnlSec(p, "gf", true), subCol: p => pnlCol(p, "gf", "down") },
+                  { kind: "item", label: "Impuestos", id: "KPI-FIN-033", get: p => { const v: any = V(p); return (v.imp == null || !v.venta) ? "—" : fmtPctS(v.imp / v.venta * 100); }, sub: p => pnlSec(p, "imp", true), subCol: p => pnlCol(p, "imp", "down") },
+                  { kind: "sub", label: "Utilidad Neta", id: "KPI-FIN-034", get: p => { const v: any = V(p); return (v.un == null || !v.venta) ? "—" : fmtPctS(v.un / v.venta * 100); }, sub: p => pnlSec(p, "un", false), subCol: p => pnlCol(p, "un", "up") },
                 ];
                 return (
                   <>
@@ -1238,7 +1251,7 @@ function AreaTable({ paises, bloques, cell }: {
   paises: readonly string[]; bloques: AreaBloque[]; cell: (p: string, f: AreaFila) => Celda;
 }) {
   return (
-    <div style={{ maxWidth: 300 + paises.length * 165 }}>
+    <div style={{ maxWidth: 350 + paises.length * 150 }}>
       {bloques.map((b, bi) => (
         <div key={bi} style={{ marginTop: bi === 0 ? 4 : 12 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)", marginBottom: 5 }}>{b.titulo}</div>
@@ -1246,7 +1259,7 @@ function AreaTable({ paises, bloques, cell }: {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
               <thead>
                 <tr style={{ background: "var(--bg-2)" }}>
-                  <Th left width={290}>Concepto</Th>
+                  <Th left width={340}>Concepto</Th>
                   {paises.map((p) => (
                     <th key={p} style={{ padding: "6px 12px", textAlign: "right", fontWeight: 500, color: "var(--text-3)", fontSize: 11 }}>
                       <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em", marginRight: 5 }}>{p}</span>
@@ -1258,7 +1271,7 @@ function AreaTable({ paises, bloques, cell }: {
               <tbody>
                 {b.filas.map((f) => (
                   <tr key={f.id} style={{ background: f.sub ? "var(--bg-2)" : "var(--bg-0)", borderTop: "0.5px solid var(--border)" }}>
-                    <td style={{ padding: "4px 12px", lineHeight: 1.3, color: f.sub ? "var(--text-1)" : "var(--text-3)", fontWeight: f.sub ? 600 : 400 }}>
+                    <td style={{ padding: "4px 12px", lineHeight: 1.3, verticalAlign: "top", color: f.sub ? "var(--text-1)" : "var(--text-3)", fontWeight: f.sub ? 600 : 400 }}>
                       {f.label}
                       {f.unidad && <span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 5 }}>{f.unidad}</span>}
                       <span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 6 }}>{f.id}</span>
@@ -1266,7 +1279,7 @@ function AreaTable({ paises, bloques, cell }: {
                     {paises.map((p) => {
                       const c = cell(p, f);
                       return (
-                        <td key={p} style={{ padding: "4px 12px", textAlign: "right", lineHeight: 1.3, fontVariantNumeric: "tabular-nums" }}>
+                        <td key={p} style={{ padding: "4px 12px", textAlign: "right", verticalAlign: "top", lineHeight: 1.3, fontVariantNumeric: "tabular-nums" }}>
                           <div style={{ fontWeight: f.sub ? 600 : 400, color: c.main === "—" ? "var(--text-4)" : f.sub ? "var(--text-1)" : "var(--text-2)" }}>{c.main}</div>
                           {c.sec && <div style={{ fontSize: 9.5, color: c.col, marginTop: -1 }}>{c.sec}</div>}
                         </td>
