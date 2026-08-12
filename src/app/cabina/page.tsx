@@ -561,9 +561,8 @@ export default function Cabina() {
     const bueno = dir === "up" ? d >= 0 : d <= 0;
     return bueno ? "var(--green)" : "var(--rose)";
   };
-  // el año anterior solo se consulta cuando el interruptor lo pide
+  // el año anterior se consulta siempre: la flecha de dirección lo necesita en los tres modos
   useEffect(() => {
-    if (secMode === "imp") return;
     const MVAREA2: Record<string, string> = {
       finanzas: "finanzas", operaciones: "operaciones", comercial: "comercial",
       logistica: "logistica", marketing: "marketing", rrhh: "rh", auditoria: "auditoria",
@@ -576,7 +575,7 @@ export default function Cabina() {
       .then((d) => { if (vivo && d.ok) setMvDataAA((prev) => ({ ...prev, [mv]: d.data || {} })); })
       .catch(() => {});
     return () => { vivo = false; };
-  }, [area, year, month, secMode]);
+  }, [area, year, month, recarga]);
 
   const avisoArea = (mvName: string, etiqueta: string) => {
     const err = mvErr[mvName];
