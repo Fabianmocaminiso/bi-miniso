@@ -419,6 +419,16 @@ export default function Cabina() {
   const [mvErr, setMvErr] = useState<Record<string, string>>({});
   const [mvCargando, setMvCargando] = useState<Record<string, boolean>>({});
   const [recarga, setRecarga] = useState(0);
+  const [movil, setMovil] = useState(false);
+  const [paisMovil, setPaisMovil] = useState<string>(PAISES[0]);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    const aplicar = () => { setMovil(mq.matches); if (mq.matches) setSecMode("var"); };
+    aplicar();
+    mq.addEventListener("change", aplicar);
+    return () => mq.removeEventListener("change", aplicar);
+  }, []);
+
   const MV_DE_AREA: Record<string, string> = { finanzas: "finanzas", operaciones: "operaciones", comercial: "comercial", logistica: "logistica", marketing: "marketing", rrhh: "rh", auditoria: "auditoria" };
   const [selPaises, setSelPaises] = useState<string[]>([...PAISES]);
   const paisesVis = PAISES.filter((p) => selPaises.includes(p));
@@ -660,7 +670,7 @@ export default function Cabina() {
           </span>
         </div>
 
-        <nav style={{ display: "flex", gap: 2 }}>
+        <nav style={{ display: movil ? "none" : "flex", gap: 2 }}>
           {AREAS.map((a) => (
             <button
               key={a.id}
@@ -687,10 +697,11 @@ export default function Cabina() {
 
         {/* ── SIDEBAR ── */}
         <aside style={{
+          display: movil ? "none" : "flex",
           width: 148, background: "var(--bg-1)",
           borderRight: "0.5px solid var(--border)",
           padding: "16px 0", flexShrink: 0,
-          display: "flex", flexDirection: "column", gap: 0,
+          flexDirection: "column", gap: 0,
         }}>
           <SideSection label="Vistas" />
           <SideItem icon="▦" label="Cabina" active />
@@ -726,7 +737,10 @@ export default function Cabina() {
         </aside>
 
         {/* ── MAIN ── */}
-        <main style={{ flex: 1, overflow: "auto", padding: 20 }}>
+        <main style={{ flex: 1, overflow: "auto", padding: movil ? "0 10px 64px" : 20 }}>
+          {movil && (
+            <MovilChips paises={PAISES} sel={paisMovil} onSel={setPaisMovil} periodo={periodo} />
+          )}
 
           {/* ══════════════════════════════════════════════
               FINANZAS
@@ -849,31 +863,55 @@ export default function Cabina() {
                   <>
                     {avisoArea("finanzas", "Finanzas")}
                     <SecToggle value={secMode} onChange={setSecMode} />
-                    <PnLTable paises={pnlPaises} rows={rows} />
+                    {movil
+                      ? <MovilPnL pais={paisMovil} rows={rows} />
+                      : <PnLTable paises={pnlPaises} rows={rows} />}
                     <div style={{ fontSize: 10, color: "var(--text-4)", marginTop: 6, lineHeight: 1.5 }}>
                       Todos los conceptos se expresan como % sobre facturación para permitir comparación entre monedas; el importe en moneda local va debajo en gris. Los subtotales se recalculan localmente
                       sobre el valor absoluto de costos y gastos. El origen los almacena en negativo y los subtotales de la
                       vista quedan sobrestimados. Pendiente de corrección en datos maestros.
                     </div>
-                    <KpiGroupTable paises={pnlPaises} title="Volumen y mismas tiendas" cols={[
+                    {movil
+                      ? <MovilKpiList pais={paisMovil} title="Volumen y mismas tiendas" cols={[
                       { id: "KPI-FIN-003", label: "Piezas totales",   getVal: p => finVal(p, "fact_pzas") },
                       { id: "KPI-FIN-002", label: "Facturación MT",   getVal: p => finVal(p, "facturacion_mt_venta", "money") },
                       { id: "KPI-FIN-004", label: "Piezas MT",        getVal: p => finVal(p, "facturacion_mt_piezas") },
                       { id: "KPI-FIN-005", label: "% Crec. MT vs AA", getVal: p => finVal(p, "pct_crecimiento_mts_vs_anio_anterior", "pct") },
                     ]} />
-                    <KpiGroupTable paises={pnlPaises} title="Venta por canal" cols={[
+                      : <KpiGroupTable paises={pnlPaises} title="Volumen y mismas tiendas" cols={[
+                      { id: "KPI-FIN-003", label: "Piezas totales",   getVal: p => finVal(p, "fact_pzas") },
+                      { id: "KPI-FIN-002", label: "Facturación MT",   getVal: p => finVal(p, "facturacion_mt_venta", "money") },
+                      { id: "KPI-FIN-004", label: "Piezas MT",        getVal: p => finVal(p, "facturacion_mt_piezas") },
+                      { id: "KPI-FIN-005", label: "% Crec. MT vs AA", getVal: p => finVal(p, "pct_crecimiento_mts_vs_anio_anterior", "pct") },
+                    ]} />}
+                    {movil
+                      ? <MovilKpiList pais={paisMovil} title="Venta por canal" cols={[
                       { id: "KPI-FIN-041", label: "Blind Lab",    getVal: p => finVal(p, "venta_blind_lab", "money") },
                       { id: "KPI-FIN-042", label: "E-commerce",   getVal: p => finVal(p, "venta_on_line", "money") },
                       { id: "KPI-FIN-043", label: "Marketplaces", getVal: p => finVal(p, "venta_marketplaces", "money") },
                       { id: "KPI-FIN-044", label: "Coppel",       getVal: p => finVal(p, "venta_coppel", "money") },
                     ]} />
-                    <KpiGroupTable paises={pnlPaises} title="Estructura financiera" cols={[
+                      : <KpiGroupTable paises={pnlPaises} title="Venta por canal" cols={[
+                      { id: "KPI-FIN-041", label: "Blind Lab",    getVal: p => finVal(p, "venta_blind_lab", "money") },
+                      { id: "KPI-FIN-042", label: "E-commerce",   getVal: p => finVal(p, "venta_on_line", "money") },
+                      { id: "KPI-FIN-043", label: "Marketplaces", getVal: p => finVal(p, "venta_marketplaces", "money") },
+                      { id: "KPI-FIN-044", label: "Coppel",       getVal: p => finVal(p, "venta_coppel", "money") },
+                    ]} />}
+                    {movil
+                      ? <MovilKpiList pais={paisMovil} title="Estructura financiera" cols={[
                       { id: "KPI-FIN-036", label: "Free Cash Flow",   getVal: p => finVal(p, "free_cash_flow", "money") },
                       { id: "KPI-FIN-037", label: "Tasa (spread)",    getVal: p => finVal(p, "tasa", "pct") },
                       { id: "KPI-FIN-038", label: "Deuda",            getVal: p => finVal(p, "deuda", "money") },
                       { id: "KPI-FIN-039", label: "Apalancamiento",   getVal: p => finVal(p, "apalancamiento_vs_deuda", "dec2") },
                       { id: "KPI-FIN-040", label: "Seguros x recup.", getVal: p => finVal(p, "montos_seguros_por_recuperar", "money") },
                     ]} />
+                      : <KpiGroupTable paises={pnlPaises} title="Estructura financiera" cols={[
+                      { id: "KPI-FIN-036", label: "Free Cash Flow",   getVal: p => finVal(p, "free_cash_flow", "money") },
+                      { id: "KPI-FIN-037", label: "Tasa (spread)",    getVal: p => finVal(p, "tasa", "pct") },
+                      { id: "KPI-FIN-038", label: "Deuda",            getVal: p => finVal(p, "deuda", "money") },
+                      { id: "KPI-FIN-039", label: "Apalancamiento",   getVal: p => finVal(p, "apalancamiento_vs_deuda", "dec2") },
+                      { id: "KPI-FIN-040", label: "Seguros x recup.", getVal: p => finVal(p, "montos_seguros_por_recuperar", "money") },
+                    ]} />}
                   </>
                 );
               })()}
@@ -888,7 +926,9 @@ export default function Cabina() {
               <AreaHeader title={periodo} sub="Operaciones — comparativo por país" loading={loading} />
               {avisoArea("operaciones", "Operaciones")}
               <SecToggle value={secMode} onChange={setSecMode} />
-              <AreaTable paises={paisesVis} bloques={BLK_OPERACIONES} cell={celdaArea("operaciones")} />
+              {movil
+                ? <MovilArea pais={paisMovil} bloques={BLK_OPERACIONES} cell={celdaArea("operaciones")} />
+                : <AreaTable paises={paisesVis} bloques={BLK_OPERACIONES} cell={celdaArea("operaciones")} />}
             </>
           )}
 
@@ -900,7 +940,9 @@ export default function Cabina() {
               <AreaHeader title={periodo} sub="Comercial — comparativo por país" loading={loading} />
               {avisoArea("comercial", "Comercial")}
               <SecToggle value={secMode} onChange={setSecMode} />
-              <AreaTable paises={paisesVis} bloques={BLK_COMERCIAL} cell={celdaArea("comercial")} />
+              {movil
+                ? <MovilArea pais={paisMovil} bloques={BLK_COMERCIAL} cell={celdaArea("comercial")} />
+                : <AreaTable paises={paisesVis} bloques={BLK_COMERCIAL} cell={celdaArea("comercial")} />}
             </>
           )}
 
@@ -912,7 +954,9 @@ export default function Cabina() {
               <AreaHeader title={periodo} sub="RRHH — comparativo por país" loading={loading} />
               {avisoArea("rh", "RRHH")}
               <SecToggle value={secMode} onChange={setSecMode} />
-              <AreaTable paises={paisesVis} bloques={BLK_RRHH} cell={celdaArea("rh")} />
+              {movil
+                ? <MovilArea pais={paisMovil} bloques={BLK_RRHH} cell={celdaArea("rh")} />
+                : <AreaTable paises={paisesVis} bloques={BLK_RRHH} cell={celdaArea("rh")} />}
             </>
           )}
 
@@ -924,7 +968,9 @@ export default function Cabina() {
               <AreaHeader title={periodo} sub="Logística — comparativo por país" loading={loading} />
               {avisoArea("logistica", "Logística")}
               <SecToggle value={secMode} onChange={setSecMode} />
-              <AreaTable paises={paisesVis} bloques={BLK_LOGISTICA} cell={celdaArea("logistica")} />
+              {movil
+                ? <MovilArea pais={paisMovil} bloques={BLK_LOGISTICA} cell={celdaArea("logistica")} />
+                : <AreaTable paises={paisesVis} bloques={BLK_LOGISTICA} cell={celdaArea("logistica")} />}
             </>
           )}
 
@@ -936,7 +982,9 @@ export default function Cabina() {
               <AreaHeader title={periodo} sub="Marketing — comparativo por país" loading={loading} />
               {avisoArea("marketing", "Marketing")}
               <SecToggle value={secMode} onChange={setSecMode} />
-              <AreaTable paises={paisesVis} bloques={BLK_MARKETING} cell={celdaArea("marketing")} />
+              {movil
+                ? <MovilArea pais={paisMovil} bloques={BLK_MARKETING} cell={celdaArea("marketing")} />
+                : <AreaTable paises={paisesVis} bloques={BLK_MARKETING} cell={celdaArea("marketing")} />}
             </>
           )}
 
@@ -948,11 +996,14 @@ export default function Cabina() {
               <AreaHeader title={periodo} sub="Auditoría — comparativo por país" loading={loading} />
               {avisoArea("auditoria", "Auditoría")}
               <SecToggle value={secMode} onChange={setSecMode} />
-              <AreaTable paises={paisesVis} bloques={BLK_AUDITORIA} cell={celdaArea("auditoria")} />
+              {movil
+                ? <MovilArea pais={paisMovil} bloques={BLK_AUDITORIA} cell={celdaArea("auditoria")} />
+                : <AreaTable paises={paisesVis} bloques={BLK_AUDITORIA} cell={celdaArea("auditoria")} />}
             </>
           )}
 
         </main>
+        {movil && <MovilNav area={area} setArea={setArea} />}
       </div>
 
       {/* ── BARRA CLAUDE ── */}
@@ -1278,6 +1329,160 @@ function SecToggle({ value, onChange }: { value: string; onChange: (v: string) =
             color: value === k ? "var(--text-1)" : "var(--text-3)",
             fontSize: 11, padding: "4px 10px", cursor: "pointer",
           }}>{lbl}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── versión móvil: un país a la vez, todo el contenido en vertical ───────────
+
+function MovilChips({ paises, sel, onSel, periodo }: {
+  paises: readonly string[]; sel: string; onSel: (p: string) => void; periodo: string;
+}) {
+  return (
+    <div style={{
+      position: "sticky", top: 0, zIndex: 20, background: "var(--bg-0)",
+      borderBottom: "0.5px solid var(--border)", padding: "9px 12px 8px",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <span style={{ fontSize: 13, fontWeight: 500 }}>Cabina de Control</span>
+        <span style={{ fontSize: 10, color: "var(--text-4)" }}>{periodo}</span>
+      </div>
+      <div style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 2 }}>
+        {paises.map((p) => (
+          <button key={p} onClick={() => onSel(p)} style={{
+            flexShrink: 0, border: "none", borderRadius: 12, cursor: "pointer",
+            padding: "4px 12px", fontSize: 11,
+            background: sel === p ? "var(--red)" : "var(--bg-2)",
+            color: sel === p ? "#fff" : "var(--text-3)",
+          }}>{NOMBRE[p]}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MovilNav({ area, setArea }: { area: string; setArea: (a: string) => void }) {
+  return (
+    <div style={{
+      position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 30,
+      background: "var(--bg-1)", borderTop: "0.5px solid var(--border)",
+      display: "flex", overflowX: "auto", padding: "7px 4px 9px",
+    }}>
+      {AREAS.map((a) => (
+        <button key={a.id} onClick={() => setArea(a.id)} style={{
+          flex: "1 0 auto", border: "none", background: "transparent", cursor: "pointer",
+          fontSize: 10, padding: "3px 9px", whiteSpace: "nowrap",
+          color: area === a.id ? "var(--red)" : "var(--text-4)",
+          fontWeight: area === a.id ? 600 : 400,
+        }}>{a.label}</button>
+      ))}
+    </div>
+  );
+}
+
+function MovilFila({ label, id, unidad, valor, sec, secCol, dir, dirCol, fuerte, sangria }: {
+  label: string; id?: string; unidad?: string; valor: string; sec?: string; secCol?: string;
+  dir?: string; dirCol?: string; fuerte?: boolean; sangria?: boolean;
+}) {
+  return (
+    <div style={{
+      display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10,
+      padding: fuerte ? "8px 12px" : "5px 12px",
+      paddingLeft: sangria ? 24 : 12,
+      background: fuerte ? "var(--bg-2)" : "transparent",
+      borderTop: fuerte ? "0.5px solid var(--border)" : "none",
+    }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{
+          fontSize: fuerte ? 12.5 : 11.5, fontWeight: fuerte ? 600 : 400,
+          color: fuerte ? "var(--text-1)" : "var(--text-3)", lineHeight: 1.3,
+        }}>
+          {label}
+          {unidad && <span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 4 }}>{unidad}</span>}
+        </div>
+        {id && <div style={{ fontSize: 8.5, color: "var(--text-4)" }}>{id}</div>}
+      </div>
+      <div style={{ textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+        <div style={{
+          fontSize: fuerte ? 17 : 14, fontWeight: fuerte ? 600 : 400,
+          color: valor === "—" ? "var(--text-4)" : "var(--text-1)", lineHeight: 1.15,
+        }}>
+          {valor}
+          {dir && <span style={{ fontSize: 10, marginLeft: 3, color: dirCol }}>{dir}</span>}
+        </div>
+        {sec && <div style={{ fontSize: 10, color: secCol || "var(--text-3)" }}>{sec}</div>}
+      </div>
+    </div>
+  );
+}
+
+function MovilPnL({ pais, rows }: { pais: string; rows: PnLRow[] }) {
+  return (
+    <div style={{ border: "0.5px solid var(--border)", borderRadius: 10, overflow: "hidden", margin: "10px 0" }}>
+      {rows.map((r, i) => (
+        <MovilFila
+          key={i}
+          label={r.label}
+          id={r.id}
+          valor={r.get(pais)}
+          sec={r.sub ? r.sub(pais) : undefined}
+          secCol={r.subCol ? r.subCol(pais) : undefined}
+          dir={r.dir ? r.dir(pais) : undefined}
+          dirCol={r.dirCol ? r.dirCol(pais) : undefined}
+          fuerte={r.kind === "sub"}
+          sangria={r.kind !== "sub"}
+        />
+      ))}
+    </div>
+  );
+}
+
+function MovilArea({ pais, bloques, cell }: {
+  pais: string; bloques: AreaBloque[]; cell: (p: string, f: AreaFila) => Celda;
+}) {
+  return (
+    <div>
+      {bloques
+        .filter((b) => b.filas.some((f) => cell(pais, f).main !== "—"))
+        .map((b, bi) => (
+          <div key={bi} style={{ marginTop: bi === 0 ? 10 : 14 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 500, color: "var(--text-1)", marginBottom: 5, padding: "0 2px" }}>
+              {b.titulo}
+            </div>
+            <div style={{ border: "0.5px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
+              {b.filas.map((f) => {
+                const c = cell(pais, f);
+                return (
+                  <MovilFila
+                    key={f.id}
+                    label={f.label}
+                    id={f.id}
+                    unidad={f.unidad}
+                    valor={c.main}
+                    sec={c.sec}
+                    secCol={c.col}
+                    dir={c.dir}
+                    dirCol={c.dirCol}
+                    fuerte={f.sub}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        ))}
+    </div>
+  );
+}
+
+function MovilKpiList({ pais, title, cols }: { pais: string; title: string; cols: KpiColDef[] }) {
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ fontSize: 11.5, fontWeight: 500, color: "var(--text-1)", marginBottom: 5, padding: "0 2px" }}>{title}</div>
+      <div style={{ border: "0.5px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
+        {cols.map((c) => (
+          <MovilFila key={c.id} label={c.label} id={c.id} valor={c.getVal(pais)} />
         ))}
       </div>
     </div>
