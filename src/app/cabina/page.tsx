@@ -557,7 +557,7 @@ export default function Cabina() {
     return fmtNum(v);
   };
   const colorVar = (d: number, dir?: string): string => {
-    if (!dir) return "var(--text-4)";
+    if (!dir) return "var(--text-3)";
     const bueno = dir === "up" ? d >= 0 : d <= 0;
     return bueno ? "var(--green)" : "var(--rose)";
   };
@@ -632,7 +632,7 @@ export default function Cabina() {
       const txt = (d >= 0 ? "+" : "") + (Math.abs(d) > 0 && Math.abs(d) < 1 ? d.toFixed(2) : d.toFixed(1)) + (esPct ? " pts" : "%");
       return { main, sec: txt, col: colorVar(d, f.dir), dir: flecha, dirCol: flechaCol };
     }
-    return { main, sec: "", col: "var(--text-4)", dir: flecha, dirCol: flechaCol };
+    return { main, sec: "", col: "var(--text-3)", dir: flecha, dirCol: flechaCol };
   };
 
   const periodo =
@@ -783,7 +783,7 @@ export default function Cabina() {
                   const cur: any = V(p), aa: any = V(p, mvDataAA);
                   const pc = (cur[k] == null || !cur.venta) ? null : cur[k] / cur.venta * 100;
                   const pa = (aa[k] == null || !aa.venta)   ? null : aa[k] / aa.venta * 100;
-                  if (pc == null || pa == null) return "var(--text-4)";
+                  if (pc == null || pa == null) return "var(--text-3)";
                   return colorVar(pc - pa, dir);
                 };
                 const pnlSec = (p: string, k: string, esNeg: boolean): string => {
@@ -798,15 +798,20 @@ export default function Cabina() {
                   return (d >= 0 ? "+" : "") + (Math.abs(d) > 0 && Math.abs(d) < 1 ? d.toFixed(2) : d.toFixed(1)) + " pts";
                 };
                 const pnlCol = (p: string, k: string, dir: string): string => {
-                  if (secMode !== "var") return "var(--text-4)";
+                  if (secMode !== "var") return "var(--text-3)";
                   const cur: any = V(p), aa: any = V(p, mvDataAA);
                   const pc = (cur[k] == null || !cur.venta) ? null : cur[k] / cur.venta * 100;
                   const pa = (aa[k] == null || !aa.venta)   ? null : aa[k] / aa.venta * 100;
-                  if (pc == null || pa == null) return "var(--text-4)";
+                  if (pc == null || pa == null) return "var(--text-3)";
                   return colorVar(pc - pa, dir);
                 };
+                const ventaDir = (p: string): string => {
+                  const c = V(p).venta, a = V(p, mvDataAA).venta;
+                  if (c == null || a == null || c === a) return "";
+                  return c > a ? "▲" : "▼";
+                };
                 const ventaCol = (p: string): string => {
-                  if (secMode !== "var") return "var(--text-4)";
+                  if (secMode !== "var") return "var(--text-3)";
                   const c = V(p).venta, a = V(p, mvDataAA).venta;
                   if (c == null || a == null || a === 0) return "var(--text-4)";
                   return colorVar((c - a) / Math.abs(a) * 100, "up");
@@ -820,7 +825,7 @@ export default function Cabina() {
                   return (d >= 0 ? "+" : "") + d.toFixed(1) + "%";
                 };
                 const rows: PnLRow[] = [
-                  { kind: "sub", label: "Facturación Total", id: "KPI-FIN-001", get: p => money(V(p).venta), sub: p => ventaSec(p), subCol: p => ventaCol(p) },
+                  { kind: "sub", label: "Facturación Total", id: "KPI-FIN-001", get: p => money(V(p).venta), sub: p => ventaSec(p), subCol: p => ventaCol(p), dir: p => ventaDir(p), dirCol: p => ventaCol(p) },
                   { kind: "item", label: "Costo de ventas", id: "KPI-FIN-006", get: p => { const v: any = V(p); return (v.cv == null || !v.venta) ? "—" : fmtPctS(v.cv / v.venta * 100); }, sub: p => pnlSec(p, "cv", true), subCol: p => pnlCol(p, "cv", "down"), dir: p => pnlDir(p, "cv"), dirCol: p => pnlDirCol(p, "cv", "down") },
                   { kind: "item", label: "Costo de almacén", id: "KPI-FIN-008", get: p => { const v: any = V(p); return (v.ca == null || !v.venta) ? "—" : fmtPctS(v.ca / v.venta * 100); }, sub: p => pnlSec(p, "ca", true), subCol: p => pnlCol(p, "ca", "down"), dir: p => pnlDir(p, "ca"), dirCol: p => pnlDirCol(p, "ca", "down") },
                   { kind: "item", label: "Nómina de almacén", id: "KPI-FIN-010", get: p => { const v: any = V(p); return (v.nomAlm == null || !v.venta) ? "—" : fmtPctS(v.nomAlm / v.venta * 100); }, sub: p => pnlSec(p, "nomAlm", true), subCol: p => pnlCol(p, "nomAlm", "down"), dir: p => pnlDir(p, "nomAlm"), dirCol: p => pnlDirCol(p, "nomAlm", "down") },
