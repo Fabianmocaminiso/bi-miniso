@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 
 // ─── tipos ────────────────────────────────────────────────────────────────────
 
@@ -418,6 +418,8 @@ export default function Cabina() {
   const [secMode, setSecMode] = useState<string>("imp");
   const [mvErr, setMvErr] = useState<Record<string, string>>({});
   const [mvCargando, setMvCargando] = useState<Record<string, boolean>>({});
+  const [recarga, setRecarga] = useState(0);
+  const MV_DE_AREA: Record<string, string> = { finanzas: "finanzas", operaciones: "operaciones", comercial: "comercial", logistica: "logistica", marketing: "marketing", rrhh: "rh", auditoria: "auditoria" };
   const [selPaises, setSelPaises] = useState<string[]>([...PAISES]);
   const paisesVis = PAISES.filter((p) => selPaises.includes(p));
   const togglePais = (p: string) => {
@@ -429,7 +431,7 @@ export default function Cabina() {
     );
   };
   const [data,  setData]  = useState<CabinaData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [area, setArea] = useState("finanzas");
 
@@ -458,73 +460,10 @@ export default function Cabina() {
   const [respuesta, setRespuesta] = useState("");
   const [iaLoading, setIaLoading] = useState(false);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    fetch(`/api/cabina?year=${year}&month=${month}&period=${ptype}`)
-      .then((r) => r.json())
-      .then((d) => { if (d.ok) setData(d.data); else setError(d.error); })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [year, month, ptype]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const loadMarketing = useCallback(() => {
-    setMktLoading(true);
-    setMktError(null);
-    fetch(`/api/marketing?year=${year}&month=${month}&period=${ptype}`)
-      .then((r) => r.json())
-      .then((d) => { if (d.ok) setMktData(d.data); else setMktError(d.error); })
-      .catch((e) => setMktError(e.message))
-      .finally(() => setMktLoading(false));
-  }, [year, month, ptype]);
-
-  useEffect(() => {
-    if (area === "marketing") loadMarketing();
-  }, [area, loadMarketing]);
-
-  const loadOperaciones = useCallback(() => {
-    setOpsLoading(true);
-    setOpsError(null);
-    fetch(`/api/operaciones?year=${year}&month=${month}&period=${ptype}`)
-      .then((r) => r.json())
-      .then((d) => { if (d.ok) setOpsData(d); else setOpsError(d.error); })
-      .catch((e) => setOpsError(e.message))
-      .finally(() => setOpsLoading(false));
-  }, [year, month, ptype]);
-
-  useEffect(() => {
-    if (area === "operaciones") loadOperaciones();
-  }, [area, loadOperaciones]);
-
-  const loadComercial = useCallback(() => {
-    setComLoading(true);
-    setComError(null);
-    fetch(`/api/comercial?year=${year}&month=${month}&period=${ptype}`)
-      .then((r) => r.json())
-      .then((d) => { if (d.ok) setComData(d); else setComError(d.error); })
-      .catch((e) => setComError(e.message))
-      .finally(() => setComLoading(false));
-  }, [year, month, ptype]);
-
-  useEffect(() => {
-    if (area === "comercial") loadComercial();
-  }, [area, loadComercial]);
-
-  const loadLogistica = useCallback(() => {
-    setLogLoading(true);
-    setLogError(null);
-    fetch(`/api/logistica?year=${year}&month=${month}&period=${ptype}`)
-      .then((r) => r.json())
-      .then((d) => { if (d.ok) setLogData(d); else setLogError(d.error); })
-      .catch((e) => setLogError(e.message))
-      .finally(() => setLogLoading(false));
-  }, [year, month, ptype]);
-
-  useEffect(() => {
-    if (area === "logistica") loadLogistica();
-  }, [area, loadLogistica]);
+  // Sprint 15 — se eliminaron las 5 cargas de /api/cabina, /api/marketing, /api/operaciones,
+  // /api/comercial y /api/logistica: desde el Sprint 14 las 7 áreas leen de /api/mv y esos
+  // resultados ya no se usaban en el render. Eran 5 consultas a Redshift por carga que
+  // saturaban la conexión y dejaban en cola la consulta del área activa.
 
   // Sprint 12 — carga genérica de la vista materializada del área activa
   useEffect(() => {
@@ -548,7 +487,7 @@ export default function Cabina() {
       .catch((e) => { if (vivo) setMvErr((prev) => ({ ...prev, [mv]: "No se pudo conectar: " + (e?.message || "error de red") })); })
       .finally(() => { if (vivo) setMvCargando((prev) => ({ ...prev, [mv]: false })); });
     return () => { vivo = false; };
-  }, [area, year, month]);
+  }, [area, year, month, recarga]);
 
   async function preguntarIA() {
     if (!pregunta.trim()) return;
@@ -569,13 +508,6 @@ export default function Cabina() {
     }
   }
 
-  // totales LATAM
-  const totales = data ? {
-    tiendas:     paisesVis.reduce((s, p) => s + (data[p]?.num_tiendas || 0), 0),
-    facturacion: paisesVis.reduce((s, p) => s + (data[p]?.facturacion_total || 0), 0),
-    ub:          paisesVis.reduce((s, p) => s + (data[p]?.utilidad_bruta || 0), 0),
-    piezas:      paisesVis.reduce((s, p) => s + (data[p]?.piezas || 0), 0),
-  } : null;
 
   // Sprint 12 — accessor único para cualquier MV
   const mv = (mvName: string, pais: string, field: string, mode?: string): string => {
@@ -603,6 +535,7 @@ export default function Cabina() {
   const logVal = (p: string, f: string, m?: string) => mv("logistica", p, f, m);
   const mktVal = (p: string, f: string, m?: string) => mv("marketing", p, f, m);
   const mvHas  = (n: string) => Object.keys(mvData[n] || {}).length > 0;
+  const cargandoArea = !!mvCargando[MV_DE_AREA[area] || ""];
 
   // Sprint 14 — comparativo contra el mismo mes del año anterior
   const crudo = (src: Record<string, Record<string, MvRow>>, mvName: string, pais: string, campo: string): number | null => {
@@ -679,22 +612,28 @@ export default function Cabina() {
     if (typeof bruto === "string") return { main, sec: "", col: "var(--text-4)" };
     const cur = crudo(mvData, mvName, pais, f.campo);
     const aa  = crudo(mvDataAA, mvName, pais, f.campo);
-    if (secMode === "aa") return { main, sec: aa == null ? "" : fmtModo(aa, f.modo), col: "var(--text-4)" };
+    // flecha de dirección: visible en los tres modos, no solo en "variación"
+    let flecha = "", flechaCol = "";
+    if (cur != null && aa != null && f.dir) {
+      const d = cur - aa;
+      if (d !== 0) { flecha = d > 0 ? "▲" : "▼"; flechaCol = colorVar(d, f.dir); }
+    }
+    if (secMode === "aa") return { main, sec: aa == null ? "" : "AA " + fmtModo(aa, f.modo), col: "var(--text-3)", dir: flecha, dirCol: flechaCol };
     if (secMode === "var") {
-      if (cur == null || aa == null) return { main, sec: "", col: "var(--text-4)" };
+      if (cur == null || aa == null) return { main, sec: "", col: "var(--text-4)", dir: flecha, dirCol: flechaCol };
       const esPct = f.modo === "pct" || f.modo === "pctd";
       if (f.unidad === "Conteo") {
         const du = cur - aa;
         const t = (du >= 0 ? "+" : "") + fmtNum(Math.abs(du) < 1 ? du : Math.round(du));
-        return { main, sec: t, col: colorVar(du, f.dir) };
+        return { main, sec: t, col: colorVar(du, f.dir), dir: flecha, dirCol: flechaCol };
       }
       let d: number;
       if (esPct) d = f.modo === "pct" ? (cur - aa) * 100 : cur - aa;
       else { if (aa === 0) return { main, sec: "", col: "var(--text-4)" }; d = (cur - aa) / Math.abs(aa) * 100; }
       const txt = (d >= 0 ? "+" : "") + (Math.abs(d) > 0 && Math.abs(d) < 1 ? d.toFixed(2) : d.toFixed(1)) + (esPct ? " pts" : "%");
-      return { main, sec: txt, col: colorVar(d, f.dir) };
+      return { main, sec: txt, col: colorVar(d, f.dir), dir: flecha, dirCol: flechaCol };
     }
-    return { main, sec: "", col: "var(--text-4)" };
+    return { main, sec: "", col: "var(--text-4)", dir: flecha, dirCol: flechaCol };
   };
 
   const periodo =
@@ -760,21 +699,24 @@ export default function Cabina() {
           <SideItem icon="⊞" label="Tiendas" />
           <SideSep />
           <SideSection label="Período" />
-          <SidePicker value={ptype === "mes" ? "Mes" : ptype === "ytd" ? "YTD" : "LTM"} options={["Mes", "YTD", "LTM"]} onChange={(v) => setPtype(v === "Mes" ? "mes" : v === "YTD" ? "ytd" : "ltm")} />
+          <SidePicker value="Mes" options={["Mes"]} onChange={() => setPtype("mes")} />
+          <div style={{ fontSize: 9.5, color: "var(--text-4)", margin: "3px 10px 0", lineHeight: 1.4 }}>
+            YTD y LTM pendientes: falta definir por KPI si el acumulado se suma, se promedia o toma el último mes.
+          </div>
           <SidePicker value={MESES[month - 1]} options={MESES} onChange={(v) => setMonth(MESES.indexOf(v) + 1)} />
           <SidePicker value={String(year)} options={["2024", "2025", "2026"]} onChange={(v) => setYear(Number(v))} />
           <button
-            onClick={load}
-            disabled={loading}
+            onClick={() => setRecarga((n) => n + 1)}
+            disabled={cargandoArea}
             style={{
               display: "block", margin: "4px 10px 0", width: "calc(100% - 20px)",
-              background: loading ? "var(--bg-4)" : "var(--red)",
+              background: cargandoArea ? "var(--bg-4)" : "var(--red)",
               border: "none", color: "#fff", fontSize: 11, fontWeight: 500,
-              padding: "5px 0", borderRadius: 5, cursor: loading ? "not-allowed" : "pointer",
+              padding: "5px 0", borderRadius: 5, cursor: cargandoArea ? "not-allowed" : "pointer",
               transition: "background 0.15s",
             }}
           >
-            {loading ? "…" : "↻ Aplicar"}
+            {cargandoArea ? "…" : "↻ Aplicar"}
           </button>
           <SideSep />
           <SideSection label="Países" />
@@ -831,13 +773,27 @@ export default function Cabina() {
                 const neg = (n: number | null) => n == null ? "—" : "(" + fmtMoney(n) + ")";
                 const pctOf = (n: number | null, base: number | null) =>
                   (n == null || !base) ? "—" : fmtPct(n / base * 100);
+                const pnlDir = (p: string, k: string): string => {
+                  const cur: any = V(p), aa: any = V(p, mvDataAA);
+                  const pc = (cur[k] == null || !cur.venta) ? null : cur[k] / cur.venta * 100;
+                  const pa = (aa[k] == null || !aa.venta)   ? null : aa[k] / aa.venta * 100;
+                  if (pc == null || pa == null || pc === pa) return "";
+                  return pc > pa ? "▲" : "▼";
+                };
+                const pnlDirCol = (p: string, k: string, dir: string): string => {
+                  const cur: any = V(p), aa: any = V(p, mvDataAA);
+                  const pc = (cur[k] == null || !cur.venta) ? null : cur[k] / cur.venta * 100;
+                  const pa = (aa[k] == null || !aa.venta)   ? null : aa[k] / aa.venta * 100;
+                  if (pc == null || pa == null) return "var(--text-4)";
+                  return colorVar(pc - pa, dir);
+                };
                 const pnlSec = (p: string, k: string, esNeg: boolean): string => {
                   const cur: any = V(p); 
                   if (secMode === "imp") return esNeg ? neg(cur[k]) : money(cur[k]);
                   const aa: any = V(p, mvDataAA);
                   const pc = (cur[k] == null || !cur.venta) ? null : cur[k] / cur.venta * 100;
                   const pa = (aa[k] == null || !aa.venta)   ? null : aa[k] / aa.venta * 100;
-                  if (secMode === "aa") return pa == null ? "" : fmtPctS(pa);
+                  if (secMode === "aa") return pa == null ? "" : "AA " + fmtPctS(pa);
                   if (pc == null || pa == null) return "";
                   const d = pc - pa;
                   return (d >= 0 ? "+" : "") + (Math.abs(d) > 0 && Math.abs(d) < 1 ? d.toFixed(2) : d.toFixed(1)) + " pts";
@@ -859,31 +815,31 @@ export default function Cabina() {
                 const ventaSec = (p: string): string => {
                   if (secMode === "imp") return "";
                   const c = V(p).venta, a = V(p, mvDataAA).venta;
-                  if (secMode === "aa") return a == null ? "" : money(a);
+                  if (secMode === "aa") return a == null ? "" : "AA " + money(a);
                   if (c == null || a == null || a === 0) return "";
                   const d = (c - a) / Math.abs(a) * 100;
                   return (d >= 0 ? "+" : "") + d.toFixed(1) + "%";
                 };
                 const rows: PnLRow[] = [
                   { kind: "sub", label: "Facturación Total", id: "KPI-FIN-001", get: p => money(V(p).venta), sub: p => ventaSec(p), subCol: p => ventaCol(p) },
-                  { kind: "item", label: "Costo de ventas", id: "KPI-FIN-006", get: p => { const v: any = V(p); return (v.cv == null || !v.venta) ? "—" : fmtPctS(v.cv / v.venta * 100); }, sub: p => pnlSec(p, "cv", true), subCol: p => pnlCol(p, "cv", "down") },
-                  { kind: "item", label: "Costo de almacén", id: "KPI-FIN-008", get: p => { const v: any = V(p); return (v.ca == null || !v.venta) ? "—" : fmtPctS(v.ca / v.venta * 100); }, sub: p => pnlSec(p, "ca", true), subCol: p => pnlCol(p, "ca", "down") },
-                  { kind: "item", label: "Nómina de almacén", id: "KPI-FIN-010", get: p => { const v: any = V(p); return (v.nomAlm == null || !v.venta) ? "—" : fmtPctS(v.nomAlm / v.venta * 100); }, sub: p => pnlSec(p, "nomAlm", true), subCol: p => pnlCol(p, "nomAlm", "down") },
-                  { kind: "item", label: "Costo total", id: "KPI-FIN-012", get: p => { const v: any = V(p); return (v.ct == null || !v.venta) ? "—" : fmtPctS(v.ct / v.venta * 100); }, sub: p => pnlSec(p, "ct", true), subCol: p => pnlCol(p, "ct", "down") },
-                  { kind: "sub", label: "Utilidad Bruta", id: "KPI-FIN-014", get: p => { const v: any = V(p); return (v.ub == null || !v.venta) ? "—" : fmtPctS(v.ub / v.venta * 100); }, sub: p => pnlSec(p, "ub", false), subCol: p => pnlCol(p, "ub", "up") },
-                  { kind: "item", label: "Nómina operativa", id: "KPI-FIN-018", get: p => { const v: any = V(p); return (v.nomOp == null || !v.venta) ? "—" : fmtPctS(v.nomOp / v.venta * 100); }, sub: p => pnlSec(p, "nomOp", true), subCol: p => pnlCol(p, "nomOp", "down") },
-                  { kind: "item", label: "Gastos de ocupación", id: "KPI-FIN-020", get: p => { const v: any = V(p); return (v.ocup == null || !v.venta) ? "—" : fmtPctS(v.ocup / v.venta * 100); }, sub: p => pnlSec(p, "ocup", true), subCol: p => pnlCol(p, "ocup", "down") },
-                  { kind: "item", label: "Gasto de distribución", id: "KPI-FIN-022", get: p => { const v: any = V(p); return (v.dist == null || !v.venta) ? "—" : fmtPctS(v.dist / v.venta * 100); }, sub: p => pnlSec(p, "dist", true), subCol: p => pnlCol(p, "dist", "down") },
-                  { kind: "item", label: "Otros gastos operativos", id: "KPI-FIN-016", get: p => { const v: any = V(p); return (v.gOp == null || !v.venta) ? "—" : fmtPctS(v.gOp / v.venta * 100); }, sub: p => pnlSec(p, "gOp", true), subCol: p => pnlCol(p, "gOp", "down") },
-                  { kind: "item", label: "Total gastos de operación", id: "KPI-FIN-023", get: p => { const v: any = V(p); return (v.tgo == null || !v.venta) ? "—" : fmtPctS(v.tgo / v.venta * 100); }, sub: p => pnlSec(p, "tgo", true), subCol: p => pnlCol(p, "tgo", "down") },
-                  { kind: "sub", label: "EBITDA Tienda", id: "KPI-FIN-024", get: p => { const v: any = V(p); return (v.eTda == null || !v.venta) ? "—" : fmtPctS(v.eTda / v.venta * 100); }, sub: p => pnlSec(p, "eTda", false), subCol: p => pnlCol(p, "eTda", "up") },
-                  { kind: "item", label: "Gasto corporativo", id: "KPI-FIN-026", get: p => { const v: any = V(p); return (v.gc == null || !v.venta) ? "—" : fmtPctS(v.gc / v.venta * 100); }, sub: p => pnlSec(p, "gc", true), subCol: p => pnlCol(p, "gc", "down") },
-                  { kind: "item", label: "Otros gastos / ingresos", id: "KPI-FIN-029", get: p => { const v: any = V(p); return (v.oc == null || !v.venta) ? "—" : fmtPctS(v.oc / v.venta * 100); }, sub: p => pnlSec(p, "oc", false), subCol: p => pnlCol(p, "oc", "") },
-                  { kind: "sub", label: "EBITDA División", id: "KPI-FIN-028", get: p => { const v: any = V(p); return (v.eDiv == null || !v.venta) ? "—" : fmtPctS(v.eDiv / v.venta * 100); }, sub: p => pnlSec(p, "eDiv", false), subCol: p => pnlCol(p, "eDiv", "up") },
-                  { kind: "item", label: "Depreciación y amortización", id: "KPI-FIN-032", get: p => { const v: any = V(p); return (v.da == null || !v.venta) ? "—" : fmtPctS(v.da / v.venta * 100); }, sub: p => pnlSec(p, "da", true), subCol: p => pnlCol(p, "da", "down") },
-                  { kind: "item", label: "Gasto financiero", id: "KPI-FIN-031", get: p => { const v: any = V(p); return (v.gf == null || !v.venta) ? "—" : fmtPctS(v.gf / v.venta * 100); }, sub: p => pnlSec(p, "gf", true), subCol: p => pnlCol(p, "gf", "down") },
-                  { kind: "item", label: "Impuestos", id: "KPI-FIN-033", get: p => { const v: any = V(p); return (v.imp == null || !v.venta) ? "—" : fmtPctS(v.imp / v.venta * 100); }, sub: p => pnlSec(p, "imp", true), subCol: p => pnlCol(p, "imp", "down") },
-                  { kind: "sub", label: "Utilidad Neta", id: "KPI-FIN-034", get: p => { const v: any = V(p); return (v.un == null || !v.venta) ? "—" : fmtPctS(v.un / v.venta * 100); }, sub: p => pnlSec(p, "un", false), subCol: p => pnlCol(p, "un", "up") },
+                  { kind: "item", label: "Costo de ventas", id: "KPI-FIN-006", get: p => { const v: any = V(p); return (v.cv == null || !v.venta) ? "—" : fmtPctS(v.cv / v.venta * 100); }, sub: p => pnlSec(p, "cv", true), subCol: p => pnlCol(p, "cv", "down"), dir: p => pnlDir(p, "cv"), dirCol: p => pnlDirCol(p, "cv", "down") },
+                  { kind: "item", label: "Costo de almacén", id: "KPI-FIN-008", get: p => { const v: any = V(p); return (v.ca == null || !v.venta) ? "—" : fmtPctS(v.ca / v.venta * 100); }, sub: p => pnlSec(p, "ca", true), subCol: p => pnlCol(p, "ca", "down"), dir: p => pnlDir(p, "ca"), dirCol: p => pnlDirCol(p, "ca", "down") },
+                  { kind: "item", label: "Nómina de almacén", id: "KPI-FIN-010", get: p => { const v: any = V(p); return (v.nomAlm == null || !v.venta) ? "—" : fmtPctS(v.nomAlm / v.venta * 100); }, sub: p => pnlSec(p, "nomAlm", true), subCol: p => pnlCol(p, "nomAlm", "down"), dir: p => pnlDir(p, "nomAlm"), dirCol: p => pnlDirCol(p, "nomAlm", "down") },
+                  { kind: "item", label: "Costo total", id: "KPI-FIN-012", get: p => { const v: any = V(p); return (v.ct == null || !v.venta) ? "—" : fmtPctS(v.ct / v.venta * 100); }, sub: p => pnlSec(p, "ct", true), subCol: p => pnlCol(p, "ct", "down"), dir: p => pnlDir(p, "ct"), dirCol: p => pnlDirCol(p, "ct", "down") },
+                  { kind: "sub", label: "Utilidad Bruta", id: "KPI-FIN-014", get: p => { const v: any = V(p); return (v.ub == null || !v.venta) ? "—" : fmtPctS(v.ub / v.venta * 100); }, sub: p => pnlSec(p, "ub", false), subCol: p => pnlCol(p, "ub", "up"), dir: p => pnlDir(p, "ub"), dirCol: p => pnlDirCol(p, "ub", "up") },
+                  { kind: "item", label: "Nómina operativa", id: "KPI-FIN-018", get: p => { const v: any = V(p); return (v.nomOp == null || !v.venta) ? "—" : fmtPctS(v.nomOp / v.venta * 100); }, sub: p => pnlSec(p, "nomOp", true), subCol: p => pnlCol(p, "nomOp", "down"), dir: p => pnlDir(p, "nomOp"), dirCol: p => pnlDirCol(p, "nomOp", "down") },
+                  { kind: "item", label: "Gastos de ocupación", id: "KPI-FIN-020", get: p => { const v: any = V(p); return (v.ocup == null || !v.venta) ? "—" : fmtPctS(v.ocup / v.venta * 100); }, sub: p => pnlSec(p, "ocup", true), subCol: p => pnlCol(p, "ocup", "down"), dir: p => pnlDir(p, "ocup"), dirCol: p => pnlDirCol(p, "ocup", "down") },
+                  { kind: "item", label: "Gasto de distribución", id: "KPI-FIN-022", get: p => { const v: any = V(p); return (v.dist == null || !v.venta) ? "—" : fmtPctS(v.dist / v.venta * 100); }, sub: p => pnlSec(p, "dist", true), subCol: p => pnlCol(p, "dist", "down"), dir: p => pnlDir(p, "dist"), dirCol: p => pnlDirCol(p, "dist", "down") },
+                  { kind: "item", label: "Otros gastos operativos", id: "KPI-FIN-016", get: p => { const v: any = V(p); return (v.gOp == null || !v.venta) ? "—" : fmtPctS(v.gOp / v.venta * 100); }, sub: p => pnlSec(p, "gOp", true), subCol: p => pnlCol(p, "gOp", "down"), dir: p => pnlDir(p, "gOp"), dirCol: p => pnlDirCol(p, "gOp", "down") },
+                  { kind: "item", label: "Total gastos de operación", id: "KPI-FIN-023", get: p => { const v: any = V(p); return (v.tgo == null || !v.venta) ? "—" : fmtPctS(v.tgo / v.venta * 100); }, sub: p => pnlSec(p, "tgo", true), subCol: p => pnlCol(p, "tgo", "down"), dir: p => pnlDir(p, "tgo"), dirCol: p => pnlDirCol(p, "tgo", "down") },
+                  { kind: "sub", label: "EBITDA Tienda", id: "KPI-FIN-024", get: p => { const v: any = V(p); return (v.eTda == null || !v.venta) ? "—" : fmtPctS(v.eTda / v.venta * 100); }, sub: p => pnlSec(p, "eTda", false), subCol: p => pnlCol(p, "eTda", "up"), dir: p => pnlDir(p, "eTda"), dirCol: p => pnlDirCol(p, "eTda", "up") },
+                  { kind: "item", label: "Gasto corporativo", id: "KPI-FIN-026", get: p => { const v: any = V(p); return (v.gc == null || !v.venta) ? "—" : fmtPctS(v.gc / v.venta * 100); }, sub: p => pnlSec(p, "gc", true), subCol: p => pnlCol(p, "gc", "down"), dir: p => pnlDir(p, "gc"), dirCol: p => pnlDirCol(p, "gc", "down") },
+                  { kind: "item", label: "Otros gastos / ingresos", id: "KPI-FIN-029", get: p => { const v: any = V(p); return (v.oc == null || !v.venta) ? "—" : fmtPctS(v.oc / v.venta * 100); }, sub: p => pnlSec(p, "oc", false), subCol: p => pnlCol(p, "oc", ""), dir: p => pnlDir(p, "oc"), dirCol: p => pnlDirCol(p, "oc", "") },
+                  { kind: "sub", label: "EBITDA División", id: "KPI-FIN-028", get: p => { const v: any = V(p); return (v.eDiv == null || !v.venta) ? "—" : fmtPctS(v.eDiv / v.venta * 100); }, sub: p => pnlSec(p, "eDiv", false), subCol: p => pnlCol(p, "eDiv", "up"), dir: p => pnlDir(p, "eDiv"), dirCol: p => pnlDirCol(p, "eDiv", "up") },
+                  { kind: "item", label: "Depreciación y amortización", id: "KPI-FIN-032", get: p => { const v: any = V(p); return (v.da == null || !v.venta) ? "—" : fmtPctS(v.da / v.venta * 100); }, sub: p => pnlSec(p, "da", true), subCol: p => pnlCol(p, "da", "down"), dir: p => pnlDir(p, "da"), dirCol: p => pnlDirCol(p, "da", "down") },
+                  { kind: "item", label: "Gasto financiero", id: "KPI-FIN-031", get: p => { const v: any = V(p); return (v.gf == null || !v.venta) ? "—" : fmtPctS(v.gf / v.venta * 100); }, sub: p => pnlSec(p, "gf", true), subCol: p => pnlCol(p, "gf", "down"), dir: p => pnlDir(p, "gf"), dirCol: p => pnlDirCol(p, "gf", "down") },
+                  { kind: "item", label: "Impuestos", id: "KPI-FIN-033", get: p => { const v: any = V(p); return (v.imp == null || !v.venta) ? "—" : fmtPctS(v.imp / v.venta * 100); }, sub: p => pnlSec(p, "imp", true), subCol: p => pnlCol(p, "imp", "down"), dir: p => pnlDir(p, "imp"), dirCol: p => pnlDirCol(p, "imp", "down") },
+                  { kind: "sub", label: "Utilidad Neta", id: "KPI-FIN-034", get: p => { const v: any = V(p); return (v.un == null || !v.venta) ? "—" : fmtPctS(v.un / v.venta * 100); }, sub: p => pnlSec(p, "un", false), subCol: p => pnlCol(p, "un", "up"), dir: p => pnlDir(p, "un"), dirCol: p => pnlDirCol(p, "un", "up") },
                 ];
                 return (
                   <>
@@ -1251,14 +1207,14 @@ const BLK_AUDITORIA: AreaBloque[] = [
 
 type AreaFila = { id: string; label: string; campo: string; modo?: string; unidad?: string; sub?: boolean; dir?: string };
 type AreaBloque = { titulo: string; filas: AreaFila[] };
-type Celda = { main: string; sec: string; col: string };
+type Celda = { main: string; sec: string; col: string; dir?: string; dirCol?: string };
 
 function AreaTable({ paises, bloques, cell }: {
   paises: readonly string[]; bloques: AreaBloque[]; cell: (p: string, f: AreaFila) => Celda;
 }) {
   return (
     <div style={{ maxWidth: 350 + paises.length * 150 }}>
-      {bloques.map((b, bi) => (
+      {bloques.filter((b) => b.filas.some((f) => paises.some((p) => cell(p, f).main !== "—"))).map((b, bi) => (
         <div key={bi} style={{ marginTop: bi === 0 ? 4 : 12 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)", marginBottom: 5 }}>{b.titulo}</div>
           <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
@@ -1286,8 +1242,11 @@ function AreaTable({ paises, bloques, cell }: {
                       const c = cell(p, f);
                       return (
                         <td key={p} style={{ padding: "4px 12px", textAlign: "right", verticalAlign: "top", lineHeight: 1.3, fontVariantNumeric: "tabular-nums" }}>
-                          <div style={{ fontWeight: f.sub ? 600 : 400, color: c.main === "—" ? "var(--text-4)" : f.sub ? "var(--text-1)" : "var(--text-2)" }}>{c.main}</div>
-                          {c.sec && <div style={{ fontSize: 9.5, color: c.col, marginTop: -1 }}>{c.sec}</div>}
+                          <div style={{ fontWeight: f.sub ? 600 : 400, color: c.main === "—" ? "var(--text-4)" : f.sub ? "var(--text-1)" : "var(--text-2)" }}>
+                            {c.main}
+                            {c.dir && <span style={{ fontSize: 8.5, marginLeft: 3, color: c.dirCol }}>{c.dir}</span>}
+                          </div>
+                          {c.sec && <div style={{ fontSize: 10, color: c.col, marginTop: -1 }}>{c.sec}</div>}
                         </td>
                       );
                     })}
@@ -1321,7 +1280,7 @@ function SecToggle({ value, onChange }: { value: string; onChange: (v: string) =
   );
 }
 
-type PnLRow = { kind: "sub" | "item"; label: string; id?: string; get: (pais: string) => string; sub?: (pais: string) => string; subCol?: (pais: string) => string };
+type PnLRow = { kind: "sub" | "item"; label: string; id?: string; get: (pais: string) => string; sub?: (pais: string) => string; subCol?: (pais: string) => string; dir?: (pais: string) => string; dirCol?: (pais: string) => string };
 
 function PnLTable({ paises, rows }: { paises: readonly string[]; rows: PnLRow[] }) {
   return (
@@ -1372,9 +1331,12 @@ function PnLTable({ paises, rows }: { paises: readonly string[]; rows: PnLRow[] 
                         fontWeight: isSub ? 600 : 400,
                         fontSize: 12,
                         color: v === "—" ? "var(--text-4)" : isSub ? "var(--text-1)" : "var(--text-2)",
-                      }}>{v}</div>
+                      }}>
+                        {v}
+                        {r.dir && r.dir(p) && <span style={{ fontSize: 8.5, marginLeft: 3, color: r.dirCol ? r.dirCol(p) : "var(--text-4)" }}>{r.dir(p)}</span>}
+                      </div>
                       {sv && sv !== "—" && (
-                        <div style={{ fontSize: 9.5, color: r.subCol ? r.subCol(p) : "var(--text-4)", marginTop: -1 }}>{sv}</div>
+                        <div style={{ fontSize: 10, color: r.subCol ? r.subCol(p) : "var(--text-3)", marginTop: -1 }}>{sv}</div>
                       )}
                     </td>
                   );
