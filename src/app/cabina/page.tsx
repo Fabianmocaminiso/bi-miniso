@@ -656,7 +656,7 @@ export default function Cabina() {
       {/* ── TOPBAR ── */}
       <header style={{
         background: "var(--bg-2)", borderBottom: "0.5px solid var(--border)",
-        padding: "0 20px", height: 52, display: "flex", alignItems: "center",
+        padding: "0 20px", height: 52, display: movil ? "none" : "flex", alignItems: "center",
         justifyContent: "space-between", flexShrink: 0, gap: 16,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -737,9 +737,10 @@ export default function Cabina() {
         </aside>
 
         {/* ── MAIN ── */}
-        <main style={{ flex: 1, overflow: "auto", padding: movil ? "0 10px 64px" : 20 }}>
+        <main style={{ flex: 1, overflow: "auto", padding: movil ? "0 10px 112px" : 20 }}>
           {movil && (
-            <MovilChips paises={PAISES} sel={paisMovil} onSel={setPaisMovil} periodo={periodo} />
+            <MovilChips paises={PAISES} sel={paisMovil} onSel={setPaisMovil} periodo={periodo}
+              titulo={AREAS.find((a) => a.id === area)?.label || "Cabina"} />
           )}
 
           {/* ══════════════════════════════════════════════
@@ -1009,7 +1010,9 @@ export default function Cabina() {
       {/* ── BARRA CLAUDE ── */}
       <div style={{
         background: "var(--bg-2)", borderTop: "0.5px solid var(--border)",
-        padding: "10px 20px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
+        padding: movil ? "8px 12px" : "10px 20px",
+        display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
+        ...(movil ? { position: "fixed" as const, left: 0, right: 0, bottom: 38, zIndex: 29 } : {}),
       }}>
         <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--red)", flexShrink: 0 }} />
         <input
@@ -1017,7 +1020,7 @@ export default function Cabina() {
           value={pregunta}
           onChange={(e) => setPregunta(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && preguntarIA()}
-          placeholder="Pregunta sobre los datos — ej. ¿Por qué AR tiene el margen más bajo?"
+          placeholder={movil ? "Pregunta sobre los datos…" : "Pregunta sobre los datos — ej. ¿Por qué AR tiene el margen más bajo?"}
           style={{
             flex: 1, background: "transparent", border: "none", outline: "none",
             fontSize: 12, color: "var(--text-2)",
@@ -1337,8 +1340,8 @@ function SecToggle({ value, onChange }: { value: string; onChange: (v: string) =
 
 // ─── versión móvil: un país a la vez, todo el contenido en vertical ───────────
 
-function MovilChips({ paises, sel, onSel, periodo }: {
-  paises: readonly string[]; sel: string; onSel: (p: string) => void; periodo: string;
+function MovilChips({ paises, sel, onSel, periodo, titulo }: {
+  paises: readonly string[]; sel: string; onSel: (p: string) => void; periodo: string; titulo: string;
 }) {
   return (
     <div style={{
@@ -1346,7 +1349,7 @@ function MovilChips({ paises, sel, onSel, periodo }: {
       borderBottom: "0.5px solid var(--border)", padding: "9px 12px 8px",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <span style={{ fontSize: 13, fontWeight: 500 }}>Cabina de Control</span>
+        <span style={{ fontSize: 13, fontWeight: 500 }}>{titulo}</span>
         <span style={{ fontSize: 10, color: "var(--text-4)" }}>{periodo}</span>
       </div>
       <div style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 2 }}>
