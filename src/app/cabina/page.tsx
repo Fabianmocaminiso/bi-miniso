@@ -633,7 +633,10 @@ export default function Cabina() {
 
   const selloPeriodo = (mvName: string) => {
     const porPais = mvPais[mvName] || {};
-    const cortes = paisesVis
+    // En móvil se ve un país a la vez: el sello debe hablar de ESE país, no de
+    // todos. Si no, aparece un aviso de desfase citando países fuera de pantalla.
+    const enPantalla = movil ? [paisMovil] : paisesVis;
+    const cortes = enPantalla
       .map((p) => ({ pais: p, num: perNum(porPais[p] || "") }))
       .filter((c) => c.num > 0);
     if (!cortes.length) return null;
@@ -1076,7 +1079,8 @@ export default function Cabina() {
         background: "var(--bg-2)", borderTop: "0.5px solid var(--border)",
         padding: movil ? "8px 12px" : "10px 20px",
         display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
-        ...(movil ? { position: "fixed" as const, left: 0, right: 0, bottom: 38, zIndex: 29 } : {}),
+        // en iPhone el indicador de inicio se come la franja inferior: se suma el área segura
+        ...(movil ? { position: "fixed" as const, left: 0, right: 0, bottom: "calc(38px + env(safe-area-inset-bottom))", zIndex: 29 } : {}),
       }}>
         <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--red)", flexShrink: 0 }} />
         <input
@@ -1435,7 +1439,9 @@ function MovilNav({ area, setArea }: { area: string; setArea: (a: string) => voi
     <div style={{
       position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 30,
       background: "var(--bg-1)", borderTop: "0.5px solid var(--border)",
-      display: "flex", overflowX: "auto", padding: "7px 4px 9px",
+      display: "flex", overflowX: "auto",
+      padding: "7px 4px 9px",
+      paddingBottom: "calc(9px + env(safe-area-inset-bottom))",
     }}>
       {AREAS.map((a) => (
         <button key={a.id} onClick={() => setArea(a.id)} style={{
