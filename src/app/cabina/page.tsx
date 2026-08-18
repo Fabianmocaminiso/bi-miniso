@@ -806,8 +806,9 @@ export default function Cabina() {
         {/* ── MAIN ── */}
         <main style={{ flex: 1, overflow: "auto", padding: movil ? "0 10px 112px" : 20 }}>
           {movil && (
-            <MovilChips paises={PAISES} sel={paisMovil} onSel={setPaisMovil} periodo={periodo}
-              titulo={AREAS.find((a) => a.id === area)?.label || "Cabina"} />
+            <MovilChips paises={PAISES} sel={paisMovil} onSel={setPaisMovil}
+              titulo={AREAS.find((a) => a.id === area)?.label || "Cabina"}
+              mes={month} anio={year} onMes={setMonth} onAnio={setYear} />
           )}
 
           {/* ══════════════════════════════════════════════
@@ -1408,17 +1409,33 @@ function SecToggle({ value, onChange }: { value: string; onChange: (v: string) =
 
 // ─── versión móvil: un país a la vez, todo el contenido en vertical ───────────
 
-function MovilChips({ paises, sel, onSel, periodo, titulo }: {
-  paises: readonly string[]; sel: string; onSel: (p: string) => void; periodo: string; titulo: string;
+function MovilChips({ paises, sel, onSel, titulo, mes, anio, onMes, onAnio }: {
+  paises: readonly string[]; sel: string; onSel: (p: string) => void; titulo: string;
+  mes: number; anio: number; onMes: (m: number) => void; onAnio: (a: number) => void;
 }) {
+  // El sidebar con el selector de período se oculta en móvil, así que el mes y el
+  // año viven aquí. Se usan <select> nativos: en iOS y Android abren el selector
+  // del sistema, que es más cómodo que cualquier control propio.
+  const selEstilo = {
+    background: "var(--bg-2)", border: "0.5px solid var(--border)", borderRadius: 6,
+    color: "var(--text-2)", fontSize: 11, padding: "3px 6px",
+    fontFamily: "inherit", appearance: "none" as const, WebkitAppearance: "none" as const,
+  };
   return (
     <div style={{
       position: "sticky", top: 0, zIndex: 20, background: "var(--bg-0)",
       borderBottom: "0.5px solid var(--border)", padding: "9px 12px 8px",
     }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <span style={{ fontSize: 13, fontWeight: 500 }}>{titulo}</span>
-        <span style={{ fontSize: 10, color: "var(--text-4)" }}>{periodo}</span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8 }}>
+        <span style={{ fontSize: 13, fontWeight: 500, flexShrink: 0 }}>{titulo}</span>
+        <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+          <select value={mes} onChange={(e) => onMes(Number(e.target.value))} style={selEstilo} aria-label="Mes">
+            {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+          </select>
+          <select value={anio} onChange={(e) => onAnio(Number(e.target.value))} style={selEstilo} aria-label="Año">
+            {[2024, 2025, 2026].map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </div>
       </div>
       <div style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 2 }}>
         {paises.map((p) => (
