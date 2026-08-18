@@ -414,6 +414,8 @@ export default function Cabina() {
   type MvRow = Record<string, number | string | null>;
   const [mvData, setMvData] = useState<Record<string, Record<string, MvRow>>>({});
   const [mvMes,  setMvMes]  = useState<Record<string, string>>({});
+  // período real por país y por área. La API ya lo devuelve; antes se descartaba.
+  const [mvPais, setMvPais] = useState<Record<string, Record<string, string>>>({});
   const [mvDataAA, setMvDataAA] = useState<Record<string, Record<string, MvRow>>>({});
   const [secMode, setSecMode] = useState<string>("imp");
   const [mvErr, setMvErr] = useState<Record<string, string>>({});
@@ -493,6 +495,7 @@ export default function Cabina() {
         setMvErr((prev) => ({ ...prev, [mv]: "" }));
         setMvData((prev) => ({ ...prev, [mv]: d.data || {} }));
         setMvMes((prev) => ({ ...prev, [mv]: d.periodoUsado || "" }));
+        setMvPais((prev) => ({ ...prev, [mv]: d.periodoPorPais || {} }));
       })
       .catch((e) => { if (vivo) setMvErr((prev) => ({ ...prev, [mv]: "No se pudo conectar: " + (e?.message || "error de red") })); })
       .finally(() => { if (vivo) setMvCargando((prev) => ({ ...prev, [mv]: false })); });
@@ -613,7 +616,68 @@ export default function Cabina() {
         </div>
       );
     }
-    return null;
+    return selloPeriodo(mvName);
+  };
+
+  // ─── sello de período: a qué mes está actualizada cada área y cada país ──────
+  // La Cabina cae al último mes disponible de cada país. Antes lo hacía en
+  // silencio: se podía ver México de agosto junto a Colombia de abril sin aviso.
+  const perNum = (lbl: string): number => {
+    const m = /^(\w{3})\s+(\d{4})$/.exec((lbl || "").trim());
+    if (!m) return 0;
+    const i = MESES.indexOf(m[1]);
+    return i < 0 ? 0 : Number(m[2]) * 100 + (i + 1);
+  };
+  const perLbl = (n: number): string => n ? `${MESES[(n % 100) - 1]} ${Math.floor(n / 100)}` : "—";
+  const EN_CURSO = NOW.getFullYear() * 100 + (NOW.getMonth() + 1);
+
+  const selloPeriodo = (mvName: string) => {
+    const porPais = mvPais[mvName] || {};
+    const cortes = paisesVis
+      .map((p) => ({ pais: p, num: perNum(porPais[p] || "") }))
+      .filter((c) => c.num > 0);
+    if (!cortes.length) return null;
+
+    const nums = cortes.map((c) => c.num);
+    const comun = Math.min(...nums);
+    const desfase = comun !== Math.max(...nums);
+    const pedido = year * 100 + month;
+    const parcial = cortes.filter((c) => c.num === EN_CURSO).map((c) => NOMBRE[c.pais]);
+    const atrasado = !desfase && comun < pedido;
+
+    const igualar = () => { setYear(Math.floor(comun / 100)); setMonth(comun % 100); };
+    const detalle = cortes.map((c) => `${NOMBRE[c.pais]} ${perLbl(c.num)}`).join(" · ");
+
+    if (desfase) {
+      return (
+        <div style={{
+          background: "rgba(200,137,27,0.08)", border: "0.5px solid rgba(200,137,27,0.35)",
+          borderRadius: 6, padding: "8px 12px", marginBottom: 10,
+          fontSize: 11, color: "#C8891B", lineHeight: 1.55,
+        }}>
+          <b>Los países no están al mismo mes.</b> {detalle}. Las columnas de esta tabla
+          corresponden a períodos distintos, así que la comparación entre países no es directa.
+          {parcial.length > 0 && <> {parcial.join(" y ")} {parcial.length > 1 ? "incluyen" : "incluye"} el mes en curso, que aún no cierra.</>}
+          <button onClick={igualar} style={{
+            marginLeft: 8, background: "transparent", border: "0.5px solid rgba(200,137,27,0.5)",
+            borderRadius: 4, padding: "2px 8px", fontSize: 10, color: "#C8891B", cursor: "pointer",
+          }}>
+            Igualar todo a {perLbl(comun)}
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ fontSize: 11, color: "var(--text-4)", marginBottom: 10, lineHeight: 1.5 }}>
+        Datos a <b style={{ color: "var(--text-3)" }}>{perLbl(comun)}</b> en {
+          cortes.length <= 3
+            ? cortes.map((c) => NOMBRE[c.pais]).join(cortes.length === 2 ? " y " : ", ")
+            : `los ${cortes.length} países`}
+        {atrasado && <> — es el último cierre cargado; se pidió {MESES[month - 1]} {year} y el origen todavía no lo tiene.</>}
+        {comun === EN_CURSO && <> — mes en curso, cifras parciales.</>}
+      </div>
+    );
   };
   const celdaArea = (mvName: string) => (pais: string, f: AreaFila): Celda => {
     const main = mv(mvName, pais, f.campo, f.modo);
