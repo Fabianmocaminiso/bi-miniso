@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// Ago 21, 2026 — timeout y reintentos explícitos. Antes, si la API no respondía,
+// la petición se quedaba colgada más de 20 s sin devolver nada al usuario.
+const client = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+  timeout: 30_000,
+  maxRetries: 1,
+});
 
 function buildContexto(kpis: unknown, pais: string): string {
   if (!kpis) return "No hay datos disponibles.";
@@ -48,7 +54,7 @@ export async function POST(request: Request) {
 
   try {
     const message = await client.messages.create({
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5",
       max_tokens: 768,
       system: `Eres el asistente de Business Intelligence de MINISO Mexico y LATAM.
 Analizas KPIs financieros y de ventas para la Cabina de Control del CFO.
@@ -68,7 +74,7 @@ Siempre respondes en espanol. Maximo 200 palabras.`,
     return NextResponse.json({ respuesta });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error al llamar a Claude";
+    console.error("[api/claude]", msg);   // queda en el log del servidor
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
-
