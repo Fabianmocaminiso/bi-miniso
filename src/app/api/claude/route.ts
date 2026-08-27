@@ -117,8 +117,21 @@ Siempre respondes en espanol. Maximo 200 palabras.`,
       ],
     });
 
-    const respuesta =
-      message.content[0].type === "text" ? message.content[0].text : "";
+    // Se busca el primer bloque de texto en toda la respuesta, no solo el
+    // primero del arreglo: si el modelo devuelve otro tipo de bloque antes
+    // (razonamiento, uso de herramienta), content[0] no es texto y la
+    // respuesta se iba vacía, mostrando "Sin respuesta" en la Cabina.
+    const bloqueTexto = message.content.find((b) => b.type === "text");
+    const respuesta = bloqueTexto && bloqueTexto.type === "text" ? bloqueTexto.text : "";
+
+    if (!respuesta) {
+      const tipos = message.content.map((b) => b.type).join(", ") || "ninguno";
+      console.error("[api/claude] respuesta sin texto. Bloques recibidos:", tipos,
+        "| stop_reason:", message.stop_reason);
+      return NextResponse.json({
+        error: `El modelo respondió sin texto (bloques: ${tipos}; motivo de corte: ${message.stop_reason}).`,
+      }, { status: 502 });
+    }
     return NextResponse.json({ respuesta });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error al llamar a Claude";
