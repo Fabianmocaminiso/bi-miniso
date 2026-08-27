@@ -328,22 +328,28 @@ const KPI_CATALOG: Record<string, KpiEntry[]> = {
 
 // ─── formatters ───────────────────────────────────────────────────────────────
 
+// Regla de formato: un decimal en toda la Cabina.
+// Única excepción: fmtPctS usa dos decimales cuando el valor es menor a 1%,
+// porque con uno solo un 0.02% se leería como 0.0% y parecería que no hay dato.
 function fmtMoney(n: number | null): string {
   if (n == null) return "—";
   if (n === 0) return "$0";
   const abs = Math.abs(n);
   const sign = n < 0 ? "-" : "";
-  if (abs >= 1_000_000_000) return `${sign}$${(abs / 1_000_000_000).toFixed(2)}B`;
-  if (abs >= 1_000_000)     return `${sign}$${(abs / 1_000_000).toFixed(2)}M`;
+  if (abs >= 1_000_000_000) return `${sign}$${(abs / 1_000_000_000).toFixed(1)}B`;
+  if (abs >= 1_000_000)     return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
   if (abs >= 1_000)         return `${sign}$${(abs / 1_000).toFixed(0)}K`;
   return `${sign}$${abs.toFixed(0)}`;
 }
 
 function fmtNum(n: number | null): string {
   if (n == null) return "—";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000)     return `${(n / 1_000).toFixed(0)}K`;
-  return n.toString();
+  const abs = Math.abs(n);
+  const sign = n < 0 ? "-" : "";
+  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000)     return `${sign}${(abs / 1_000).toFixed(0)}K`;
+  // antes: n.toString(), que sacaba cosas como 7.60602333347272
+  return Number.isInteger(n) ? String(n) : `${sign}${abs.toFixed(1)}`;
 }
 
 function fmtPct(n: number | null): string {
@@ -408,8 +414,12 @@ function BadgePending() {
 // ─── componente principal ─────────────────────────────────────────────────────
 
 export default function Cabina() {
-  const [year,  setYear]  = useState(NOW.getFullYear());
-  const [month, setMonth] = useState(NOW.getMonth() + 1);
+  // La Cabina abre en el mes anterior al corriente: es el último mes cerrado.
+  // El mes en curso siempre está incompleto y se prestaba a leerlo como cierre.
+  // new Date maneja solo el cambio de año: en enero devuelve diciembre del previo.
+  const MES_CERRADO = new Date(NOW.getFullYear(), NOW.getMonth() - 1, 1);
+  const [year,  setYear]  = useState(MES_CERRADO.getFullYear());
+  const [month, setMonth] = useState(MES_CERRADO.getMonth() + 1);
   const [ptype, setPtype] = useState("mes"); // mes | ytd | ltm
   type MvRow = Record<string, number | string | null>;
   const [mvData, setMvData] = useState<Record<string, Record<string, MvRow>>>({});
@@ -507,10 +517,26 @@ export default function Cabina() {
     setIaLoading(true);
     setRespuesta("");
     try {
+      // Ago 21, 2026 — antes se enviaba `data`, un estado que quedó huérfano al
+      // desconectar /api/cabina en el Sprint 15: nunca se llenaba, así que la
+      // barra mandaba null y Claude contestaba "no hay datos cargados".
+      // Ahora se envía el área que el usuario está viendo, con su período real.
+      const MVAREA3: Record<string, string> = {
+        finanzas: "finanzas", operaciones: "operaciones", comercial: "comercial",
+        logistica: "logistica", marketing: "marketing", rrhh: "rh", auditoria: "auditoria",
+      };
+      const mvAct = MVAREA3[area] || "finanzas";
       const res = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pregunta, kpis: data, pais: `LATAM (${MESES[month - 1]} ${year})` }),
+        body: JSON.stringify({
+          pregunta,
+          area: AREAS.find((a) => a.id === area)?.label || area,
+          datos: mvData[mvAct] || {},
+          periodoPorPais: mvPais[mvAct] || {},
+          paisesVisibles: paisesVis,
+          pais: `LATAM (${MESES[month - 1]} ${year})`,
+        }),
       });
       const d = await res.json();
       setRespuesta(d.respuesta || d.error || "Sin respuesta");
@@ -536,7 +562,7 @@ export default function Cabina() {
     if (mode === "money") return fmtMoney(v);
     if (mode === "abs")   return fmtNum(Math.abs(v));
     if (mode === "dec")   return v.toFixed(1);
-    if (mode === "dec2")  return v.toFixed(2);
+    if (mode === "dec2")  return v.toFixed(1);
     return fmtNum(v);
   };
   const rhVal  = (p: string, f: string, m?: string) => mv("rh", p, f, m);
@@ -566,7 +592,7 @@ export default function Cabina() {
     if (modo === "money") return fmtMoney(v);
     if (modo === "abs")   return fmtNum(Math.abs(v));
     if (modo === "dec")   return v.toFixed(1);
-    if (modo === "dec2")  return v.toFixed(2);
+    if (modo === "dec2")  return v.toFixed(1);
     return fmtNum(v);
   };
   const colorVar = (d: number, dir?: string): string => {
