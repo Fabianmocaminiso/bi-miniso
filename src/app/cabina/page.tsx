@@ -390,8 +390,8 @@ function Cell({ value, rank }: { value: string; rank: Rank }) {
     rank === "best"  ? "var(--green)" :
     rank === "worst" ? "var(--rose)"  : "var(--text-2)";
   const arrow =
-    rank === "best"  ? <span style={{ color: "var(--green)", fontSize: 9, marginLeft: 2 }}>▲</span> :
-    rank === "worst" ? <span style={{ color: "var(--rose)",  fontSize: 9, marginLeft: 2 }}>▼</span> :
+    rank === "best"  ? <span style={{ color: "var(--green)", fontSize: 11, marginLeft: 2 }}>▲</span> :
+    rank === "worst" ? <span style={{ color: "var(--rose)",  fontSize: 11, marginLeft: 2 }}>▼</span> :
     null;
   return (
     <span style={{ color, fontWeight: rank !== "mid" ? 500 : 400 }}>
@@ -803,7 +803,7 @@ export default function Cabina() {
           <SideSep />
           <SideSection label="Período" />
           <SidePicker value="Mes" options={["Mes"]} onChange={() => setPtype("mes")} />
-          <div style={{ fontSize: 9.5, color: "var(--text-4)", margin: "3px 10px 0", lineHeight: 1.4 }}>
+          <div style={{ fontSize: 11, color: "var(--text-4)", margin: "3px 10px 0", lineHeight: 1.4 }}>
             YTD y LTM pendientes: falta definir por KPI si el acumulado se suma, se promedia o toma el último mes.
           </div>
           <SidePicker value={MESES[month - 1]} options={MESES} onChange={(v) => setMonth(MESES.indexOf(v) + 1)} />
@@ -830,7 +830,7 @@ export default function Cabina() {
         </aside>
 
         {/* ── MAIN ── */}
-        <main style={{ flex: 1, overflow: "auto", padding: movil ? "0 10px 112px" : 20 }}>
+        <main style={{ flex: 1, overflow: "auto", padding: movil ? "0 10px 124px" : 20 }}>
           {movil && (
             <MovilChips paises={PAISES} sel={paisMovil} onSel={setPaisMovil}
               titulo={AREAS.find((a) => a.id === area)?.label || "Cabina"}
@@ -1107,7 +1107,7 @@ export default function Cabina() {
         padding: movil ? "8px 12px" : "10px 20px",
         display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
         // en iPhone el indicador de inicio se come la franja inferior: se suma el área segura
-        ...(movil ? { position: "fixed" as const, left: 0, right: 0, bottom: "calc(38px + env(safe-area-inset-bottom))", zIndex: 29 } : {}),
+        ...(movil ? { position: "fixed" as const, left: 0, right: 0, bottom: "calc(48px + env(safe-area-inset-bottom))", zIndex: 29 } : {}),
       }}>
         <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--red)", flexShrink: 0 }} />
         <input
@@ -1118,7 +1118,7 @@ export default function Cabina() {
           placeholder={movil ? "Pregunta sobre los datos…" : "Pregunta sobre los datos — ej. ¿Por qué AR tiene el margen más bajo?"}
           style={{
             flex: 1, background: "transparent", border: "none", outline: "none",
-            fontSize: 12, color: "var(--text-2)",
+            fontSize: 12, color: "var(--text-2)", minHeight: movil ? 40 : 24,
           }}
         />
         <button
@@ -1366,7 +1366,7 @@ function AreaTable({ paises, bloques, cell }: {
   paises: readonly string[]; bloques: AreaBloque[]; cell: (p: string, f: AreaFila) => Celda;
 }) {
   return (
-    <div style={{ maxWidth: 350 + paises.length * 150 }}>
+    <div style={{ width: "100%", maxWidth: 1440 }}>
       {bloques.filter((b) => b.filas.some((f) => paises.some((p) => cell(p, f).main !== "—"))).map((b, bi) => (
         <div key={bi} style={{ marginTop: bi === 0 ? 4 : 12 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)", marginBottom: 5 }}>{b.titulo}</div>
@@ -1377,7 +1377,7 @@ function AreaTable({ paises, bloques, cell }: {
                   <Th left width={340}>Concepto</Th>
                   {paises.map((p) => (
                     <th key={p} style={{ padding: "6px 12px", textAlign: "right", fontWeight: 500, color: "var(--text-3)", fontSize: 11 }}>
-                      <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em", marginRight: 5 }}>{p}</span>
+                      <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 11, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em", marginRight: 5 }}>{p}</span>
                       {NOMBRE[p]}
                     </th>
                   ))}
@@ -1388,8 +1388,8 @@ function AreaTable({ paises, bloques, cell }: {
                   <tr key={f.id} style={{ background: f.sub ? "var(--bg-2)" : "var(--bg-0)", borderTop: "0.5px solid var(--border)" }}>
                     <td style={{ padding: "4px 12px", lineHeight: 1.3, verticalAlign: "top", color: f.sub ? "var(--text-1)" : "var(--text-3)", fontWeight: f.sub ? 600 : 400 }}>
                       {f.label}
-                      {f.unidad && <span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 5 }}>{f.unidad}</span>}
-                      <span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 6 }}>{f.id}</span>
+                      {f.unidad && <span style={{ color: "var(--text-4)", fontSize: 11, marginLeft: 5 }}>{f.unidad}</span>}
+                      <span style={{ color: "var(--text-4)", fontSize: 11, marginLeft: 6 }}>{f.id}</span>
                     </td>
                     {paises.map((p) => {
                       const c = cell(p, f);
@@ -1397,7 +1397,7 @@ function AreaTable({ paises, bloques, cell }: {
                         <td key={p} style={{ padding: "4px 12px", textAlign: "right", verticalAlign: "top", lineHeight: 1.3, fontVariantNumeric: "tabular-nums" }}>
                           <div style={{ fontWeight: f.sub ? 600 : 400, color: c.main === "—" ? "var(--text-4)" : f.sub ? "var(--text-1)" : "var(--text-2)" }}>
                             {c.main}
-                            {c.dir && <span style={{ fontSize: 8.5, marginLeft: 3, color: c.dirCol }}>{c.dir}</span>}
+                            {c.dir && <span style={{ fontSize: 10, marginLeft: 3, color: c.dirCol }}>{c.dir}</span>}
                           </div>
                           {c.sec && <div style={{ fontSize: 10, color: c.col, marginTop: -1 }}>{c.sec}</div>}
                         </td>
@@ -1425,7 +1425,7 @@ function SecToggle({ value, onChange }: { value: string; onChange: (v: string) =
             border: "none", borderLeft: i === 0 ? "none" : "0.5px solid var(--border)",
             background: value === k ? "var(--bg-4)" : "transparent",
             color: value === k ? "var(--text-1)" : "var(--text-3)",
-            fontSize: 11, padding: "4px 10px", cursor: "pointer",
+            fontSize: 12, padding: "8px 12px", minHeight: 36, cursor: "pointer",
           }}>{lbl}</button>
         ))}
       </div>
@@ -1444,7 +1444,7 @@ function MovilChips({ paises, sel, onSel, titulo, mes, anio, onMes, onAnio }: {
   // del sistema, que es más cómodo que cualquier control propio.
   const selEstilo = {
     background: "var(--bg-2)", border: "0.5px solid var(--border)", borderRadius: 6,
-    color: "var(--text-2)", fontSize: 11, padding: "3px 6px",
+    color: "var(--text-2)", fontSize: 12, padding: "0 8px", minHeight: 44,
     fontFamily: "inherit", appearance: "none" as const, WebkitAppearance: "none" as const,
   };
   return (
@@ -1466,8 +1466,8 @@ function MovilChips({ paises, sel, onSel, titulo, mes, anio, onMes, onAnio }: {
       <div style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 2 }}>
         {paises.map((p) => (
           <button key={p} onClick={() => onSel(p)} style={{
-            flexShrink: 0, border: "none", borderRadius: 12, cursor: "pointer",
-            padding: "4px 12px", fontSize: 11,
+            flexShrink: 0, border: "none", borderRadius: 22, cursor: "pointer",
+            padding: "0 16px", minHeight: 44, fontSize: 12,
             background: sel === p ? "var(--red)" : "var(--bg-2)",
             color: sel === p ? "#fff" : "var(--text-3)",
           }}>{NOMBRE[p]}</button>
@@ -1483,13 +1483,13 @@ function MovilNav({ area, setArea }: { area: string; setArea: (a: string) => voi
       position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 30,
       background: "var(--bg-1)", borderTop: "0.5px solid var(--border)",
       display: "flex", overflowX: "auto",
-      padding: "7px 4px 9px",
-      paddingBottom: "calc(9px + env(safe-area-inset-bottom))",
+      padding: "0 4px",
+      paddingBottom: "env(safe-area-inset-bottom)",
     }}>
       {AREAS.map((a) => (
         <button key={a.id} onClick={() => setArea(a.id)} style={{
           flex: "1 0 auto", border: "none", background: "transparent", cursor: "pointer",
-          fontSize: 10, padding: "3px 9px", whiteSpace: "nowrap",
+          fontSize: 11, padding: "0 10px", minHeight: 48, whiteSpace: "nowrap",
           color: area === a.id ? "var(--red)" : "var(--text-4)",
           fontWeight: area === a.id ? 600 : 400,
         }}>{a.label}</button>
@@ -1516,9 +1516,9 @@ function MovilFila({ label, id, unidad, valor, sec, secCol, dir, dirCol, fuerte,
           color: fuerte ? "var(--text-1)" : "var(--text-3)", lineHeight: 1.3,
         }}>
           {label}
-          {unidad && <span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 4 }}>{unidad}</span>}
+          {unidad && <span style={{ color: "var(--text-4)", fontSize: 11, marginLeft: 4 }}>{unidad}</span>}
         </div>
-        {id && <div style={{ fontSize: 8.5, color: "var(--text-4)" }}>{id}</div>}
+        {id && <div style={{ fontSize: 10, color: "var(--text-4)" }}>{id}</div>}
       </div>
       <div style={{ textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
         <div style={{
@@ -1564,7 +1564,7 @@ function MovilArea({ pais, bloques, cell }: {
         .filter((b) => b.filas.some((f) => cell(pais, f).main !== "—"))
         .map((b, bi) => (
           <div key={bi} style={{ marginTop: bi === 0 ? 10 : 14 }}>
-            <div style={{ fontSize: 11.5, fontWeight: 500, color: "var(--text-1)", marginBottom: 5, padding: "0 2px" }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)", marginBottom: 5, padding: "0 2px" }}>
               {b.titulo}
             </div>
             <div style={{ border: "0.5px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
@@ -1595,7 +1595,7 @@ function MovilArea({ pais, bloques, cell }: {
 function MovilKpiList({ pais, title, cols }: { pais: string; title: string; cols: KpiColDef[] }) {
   return (
     <div style={{ marginTop: 14 }}>
-      <div style={{ fontSize: 11.5, fontWeight: 500, color: "var(--text-1)", marginBottom: 5, padding: "0 2px" }}>{title}</div>
+      <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)", marginBottom: 5, padding: "0 2px" }}>{title}</div>
       <div style={{ border: "0.5px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
         {cols.map((c) => (
           <MovilFila key={c.id} label={c.label} id={c.id} valor={c.getVal(pais)} />
@@ -1609,16 +1609,16 @@ type PnLRow = { kind: "sub" | "item"; label: string; id?: string; get: (pais: st
 
 function PnLTable({ paises, rows }: { paises: readonly string[]; rows: PnLRow[] }) {
   return (
-    <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden", maxWidth: 270 + paises.length * 175 }}>
+    <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden", width: "100%", maxWidth: 1440, minWidth: 270 + paises.length * 175 }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
         <thead>
           <tr style={{ background: "var(--bg-2)" }}>
             <Th left width={270}>Concepto</Th>
             {paises.map((p) => (
               <th key={p} style={{ padding: "6px 12px", textAlign: "right", fontWeight: 500, color: "var(--text-3)", fontSize: 11 }}>
-                <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em", marginRight: 5 }}>{p}</span>
+                <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 11, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em", marginRight: 5 }}>{p}</span>
                 {NOMBRE[p]}
-                <span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 4 }}>{MONEDA[p]}</span>
+                <span style={{ color: "var(--text-4)", fontSize: 11, marginLeft: 4 }}>{MONEDA[p]}</span>
               </th>
             ))}
           </tr>
@@ -1640,7 +1640,7 @@ function PnLTable({ paises, rows }: { paises: readonly string[]; rows: PnLRow[] 
                   fontSize: 12,
                 }}>
                   {r.label}
-                  {r.id && <span style={{ color: "var(--text-4)", fontSize: 9, marginLeft: 6, fontWeight: 400 }}>{r.id}</span>}
+                  {r.id && <span style={{ color: "var(--text-4)", fontSize: 11, marginLeft: 6, fontWeight: 400 }}>{r.id}</span>}
                 </td>
                 {paises.map((p) => {
                   const v = r.get(p);
@@ -1658,7 +1658,7 @@ function PnLTable({ paises, rows }: { paises: readonly string[]; rows: PnLRow[] 
                         color: v === "—" ? "var(--text-4)" : isSub ? "var(--text-1)" : "var(--text-2)",
                       }}>
                         {v}
-                        {r.dir && r.dir(p) && <span style={{ fontSize: 8.5, marginLeft: 3, color: r.dirCol ? r.dirCol(p) : "var(--text-4)" }}>{r.dir(p)}</span>}
+                        {r.dir && r.dir(p) && <span style={{ fontSize: 10, marginLeft: 3, color: r.dirCol ? r.dirCol(p) : "var(--text-4)" }}>{r.dir(p)}</span>}
                       </div>
                       {sv && sv !== "—" && (
                         <div style={{ fontSize: 10, color: r.subCol ? r.subCol(p) : "var(--text-3)", marginTop: -1 }}>{sv}</div>
@@ -1695,7 +1695,7 @@ function KpiGroupTable({ title, cols, paises }: { title: string; cols: KpiColDef
               <tr key={pais} style={{ background: i % 2 === 0 ? "var(--bg-1)" : "var(--bg-0)", borderBottom: "0.5px solid var(--border)" }}>
                 <td style={{ padding: "6px 12px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 9, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{pais}</span>
+                    <span style={{ background: "var(--bg-4)", color: "var(--text-3)", fontSize: 11, padding: "2px 5px", borderRadius: 3, fontWeight: 700, letterSpacing: "0.04em" }}>{pais}</span>
                     <span style={{ color: "var(--text-1)", fontWeight: 500 }}>{NOMBRE[pais]}</span>
                   </div>
                 </td>
@@ -1767,7 +1767,7 @@ function SidePicker({ value, options, onChange }: {
         }}
       >
         {value}
-        <span style={{ fontSize: 8, color: "var(--text-4)" }}>▾</span>
+        <span style={{ fontSize: 10, color: "var(--text-4)" }}>▾</span>
       </div>
       {open && (
         <div style={{
@@ -1868,7 +1868,7 @@ function ThKpi({ children, id }: { children: React.ReactNode; id: string }) {
       whiteSpace: "nowrap",
     }}>
       <div>{children}</div>
-      <div style={{ fontSize: 8, color: "var(--text-4)", opacity: 0.5, letterSpacing: "0.04em", marginTop: 1 }}>{id}</div>
+      <div style={{ fontSize: 10, color: "var(--text-4)", opacity: 0.5, letterSpacing: "0.04em", marginTop: 1 }}>{id}</div>
     </th>
   );
 }
