@@ -1501,17 +1501,22 @@ function MovilNav({ area, setArea }: { area: string; setArea: (a: string) => voi
   );
 }
 
-function MovilFila({ label, id, unidad, valor, sec, secCol, dir, dirCol, fuerte, sangria }: {
+function MovilFila({ label, id, unidad, valor, sec, secCol, dir, dirCol, fuerte, sangria, alt }: {
   label: string; id?: string; unidad?: string; valor: string; sec?: string; secCol?: string;
-  dir?: string; dirCol?: string; fuerte?: boolean; sangria?: boolean;
+  dir?: string; dirCol?: string; fuerte?: boolean; sangria?: boolean; alt?: boolean;
 }) {
+  // El concepto y el valor quedan en extremos opuestos y con etiquetas cortas
+  // se abría un vacío que el ojo no sabía cruzar. La solución no es acercar el
+  // número —eso rompería la alineación derecha que permite comparar la columna—
+  // sino darle un carril: separador en todas las filas y banda alterna sutil,
+  // como en cualquier terminal financiero.
   return (
     <div style={{
       display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10,
-      padding: fuerte ? "8px 12px" : "5px 12px",
+      padding: fuerte ? "8px 12px" : "6px 12px",
       paddingLeft: sangria ? 24 : 12,
-      background: fuerte ? "var(--bg-2)" : "transparent",
-      borderTop: fuerte ? "0.5px solid var(--border)" : "none",
+      background: fuerte ? "var(--bg-2)" : alt ? "rgba(255,255,255,0.022)" : "transparent",
+      borderTop: "0.5px solid var(--border)",
     }}>
       <div style={{ minWidth: 0 }}>
         <div style={{
@@ -1543,6 +1548,7 @@ function MovilPnL({ pais, rows }: { pais: string; rows: PnLRow[] }) {
       {rows.map((r, i) => (
         <MovilFila
           key={i}
+          alt={i % 2 === 1}
           label={r.label}
           id={r.id}
           valor={r.get(pais)}
@@ -1591,11 +1597,12 @@ function MovilArea({ pais, bloques, cell }: {
             </button>
             {abiertos[bi] && (
             <div style={{ border: "0.5px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
-              {b.filas.map((f) => {
+              {b.filas.map((f, fi) => {
                 const c = cell(pais, f);
                 return (
                   <MovilFila
                     key={f.id}
+                    alt={fi % 2 === 1}
                     label={f.label}
                     id={f.id}
                     unidad={f.unidad}
@@ -1621,8 +1628,8 @@ function MovilKpiList({ pais, title, cols }: { pais: string; title: string; cols
     <div style={{ marginTop: 14 }}>
       <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)", marginBottom: 5, padding: "0 2px" }}>{title}</div>
       <div style={{ border: "0.5px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
-        {cols.map((c) => (
-          <MovilFila key={c.id} label={c.label} id={c.id} valor={c.getVal(pais)} />
+        {cols.map((c, i) => (
+          <MovilFila key={c.id} label={c.label} id={c.id} valor={c.getVal(pais)} alt={i % 2 === 1} />
         ))}
       </div>
     </div>
