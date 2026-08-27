@@ -9,6 +9,41 @@ const client = new Anthropic({
   maxRetries: 1,
 });
 
+
+const NOMBRE_PAIS: Record<string, string> = {
+  MX: "México", CO: "Colombia", PE: "Perú", CL: "Chile", AR: "Argentina",
+};
+
+// Contexto a partir del área que el usuario está viendo en la Cabina.
+// Se envían solo los campos con dato y se declara el mes real de cada país,
+// porque las vistas no están todas al mismo corte.
+function contextoArea(
+  area: string,
+  datos: Record<string, Record<string, number | string | null>>,
+  periodoPorPais: Record<string, string>,
+  paisesVisibles: string[],
+): string {
+  const paises = (paisesVisibles?.length ? paisesVisibles : Object.keys(datos || {}))
+    .filter((p) => datos?.[p]);
+  if (!paises.length) return "";
+
+  let ctx = `Datos de la Cabina de Control de MINISO — área de ${area}.\n`;
+  ctx += `Aviso: cada país puede estar cargado a un mes distinto; se indica abajo.\n`;
+  ctx += `Los importes están en la moneda local de cada país, así que no se suman entre sí.\n\n`;
+
+  for (const p of paises) {
+    const fila = datos[p];
+    const conDato = Object.keys(fila).filter((k) => fila[k] !== null && fila[k] !== "");
+    if (!conDato.length) continue;
+    const vacios = Object.keys(fila).length - conDato.length;
+    ctx += `${NOMBRE_PAIS[p] || p} — período ${periodoPorPais?.[p] || "no declarado"}:\n`;
+    for (const k of conDato) ctx += `  ${k}: ${fila[k]}\n`;
+    if (vacios > 0) ctx += `  (${vacios} indicadores sin dato en el origen para este período)\n`;
+    ctx += "\n";
+  }
+  return ctx;
+}
+
 function buildContexto(kpis: unknown, pais: string): string {
   if (!kpis) return "No hay datos disponibles.";
 
@@ -48,9 +83,19 @@ function buildContexto(kpis: unknown, pais: string): string {
 }
 
 export async function POST(request: Request) {
-  const { pregunta, kpis, pais } = await request.json();
+  const body = await request.json();
+  const { pregunta, kpis, pais, area, datos, periodoPorPais, paisesVisibles } = body;
 
-  const contexto = buildContexto(kpis, pais ?? "MINISO LATAM");
+  // Formato nuevo: el front manda el área visible. Se conserva el anterior por compatibilidad.
+  const contexto = area && datos
+    ? contextoArea(area, datos, periodoPorPais, paisesVisibles)
+    : buildContexto(kpis, pais ?? "MINISO LATAM");
+
+  if (!contexto.trim()) {
+    return NextResponse.json({
+      respuesta: "No hay datos cargados para el área y el período que estás viendo, así que no puedo responder sobre ellos. Revisa el aviso de período arriba de la tabla.",
+    });
+  }
 
   try {
     const message = await client.messages.create({
@@ -60,6 +105,9 @@ export async function POST(request: Request) {
 Analizas KPIs financieros y de ventas para la Cabina de Control del CFO.
 Eres conciso, directo y usas terminologia financiera apropiada.
 Cuando compares paises, senala claramente el lider y el rezagado.
+Si un pais tiene indicadores sin dato, dilo en lugar de asumir que valen cero.
+Nunca sumes importes de paises distintos: cada uno esta en su moneda local.
+Si los paises estan a meses distintos, advierte que la comparacion no es directa.
 Siempre respondes en espanol. Maximo 200 palabras.`,
       messages: [
         {
