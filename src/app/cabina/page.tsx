@@ -850,7 +850,7 @@ export default function Cabina() {
                   Error al conectar con Redshift: {error}
                 </div>
               )}
-              <AreaHeader title={periodo} sub="Estado de resultados — comparativo por país" loading={loading} />
+              <AreaHeader title={periodo} sub="Estado de resultados — comparativo por país" loading={loading} movil={movil} />
               {(() => {
                 const pnlPaises = paisesVis;
 
@@ -1018,7 +1018,7 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "operaciones" && (
             <>
-              <AreaHeader title={periodo} sub="Operaciones — comparativo por país" loading={loading} />
+              <AreaHeader title={periodo} sub="Operaciones — comparativo por país" loading={loading} movil={movil} />
               {avisoArea("operaciones", "Operaciones")}
               <SecToggle value={secMode} onChange={setSecMode} />
               {movil
@@ -1032,7 +1032,7 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "comercial" && (
             <>
-              <AreaHeader title={periodo} sub="Comercial — comparativo por país" loading={loading} />
+              <AreaHeader title={periodo} sub="Comercial — comparativo por país" loading={loading} movil={movil} />
               {avisoArea("comercial", "Comercial")}
               <SecToggle value={secMode} onChange={setSecMode} />
               {movil
@@ -1046,7 +1046,7 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "rrhh" && (
             <>
-              <AreaHeader title={periodo} sub="RRHH — comparativo por país" loading={loading} />
+              <AreaHeader title={periodo} sub="RRHH — comparativo por país" loading={loading} movil={movil} />
               {avisoArea("rh", "RRHH")}
               <SecToggle value={secMode} onChange={setSecMode} />
               {movil
@@ -1060,7 +1060,7 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "logistica" && (
             <>
-              <AreaHeader title={periodo} sub="Logística — comparativo por país" loading={loading} />
+              <AreaHeader title={periodo} sub="Logística — comparativo por país" loading={loading} movil={movil} />
               {avisoArea("logistica", "Logística")}
               <SecToggle value={secMode} onChange={setSecMode} />
               {movil
@@ -1074,7 +1074,7 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "marketing" && (
             <>
-              <AreaHeader title={periodo} sub="Marketing — comparativo por país" loading={loading} />
+              <AreaHeader title={periodo} sub="Marketing — comparativo por país" loading={loading} movil={movil} />
               {avisoArea("marketing", "Marketing")}
               <SecToggle value={secMode} onChange={setSecMode} />
               {movil
@@ -1088,7 +1088,7 @@ export default function Cabina() {
           ══════════════════════════════════════════════ */}
           {area === "auditoria" && (
             <>
-              <AreaHeader title={periodo} sub="Auditoría — comparativo por país" loading={loading} />
+              <AreaHeader title={periodo} sub="Auditoría — comparativo por país" loading={loading} movil={movil} />
               {avisoArea("auditoria", "Auditoría")}
               <SecToggle value={secMode} onChange={setSecMode} />
               {movil
@@ -1366,7 +1366,7 @@ function AreaTable({ paises, bloques, cell }: {
   paises: readonly string[]; bloques: AreaBloque[]; cell: (p: string, f: AreaFila) => Celda;
 }) {
   return (
-    <div style={{ width: "100%", maxWidth: 1440 }}>
+    <div style={{ width: "100%", maxWidth: 1250 }}>
       {bloques.filter((b) => b.filas.some((f) => paises.some((p) => cell(p, f).main !== "—"))).map((b, bi) => (
         <div key={bi} style={{ marginTop: bi === 0 ? 4 : 12 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)", marginBottom: 5 }}>{b.titulo}</div>
@@ -1395,7 +1395,10 @@ function AreaTable({ paises, bloques, cell }: {
                       const c = cell(p, f);
                       return (
                         <td key={p} style={{ padding: "4px 12px", textAlign: "right", verticalAlign: "top", lineHeight: 1.3, fontVariantNumeric: "tabular-nums" }}>
-                          <div style={{ fontWeight: f.sub ? 600 : 400, color: c.main === "—" ? "var(--text-4)" : f.sub ? "var(--text-1)" : "var(--text-2)" }}>
+                          {/* El valor es el dato, no la etiqueta: pesa más que el concepto
+                              (14px sobre 12px) y usa el color de texto principal. Antes
+                              competían al mismo tamaño y el ojo no sabía dónde aterrizar. */}
+                          <div style={{ fontSize: 14, fontWeight: f.sub ? 600 : 500, color: c.main === "—" ? "var(--text-4)" : "var(--text-1)" }}>
                             {c.main}
                             {c.dir && <span style={{ fontSize: 10, marginLeft: 3, color: c.dirCol }}>{c.dir}</span>}
                           </div>
@@ -1558,15 +1561,35 @@ function MovilPnL({ pais, rows }: { pais: string; rows: PnLRow[] }) {
 function MovilArea({ pais, bloques, cell }: {
   pais: string; bloques: AreaBloque[]; cell: (p: string, f: AreaFila) => Celda;
 }) {
+  // RRHH exigía 3.2 pantallas de scroll en el teléfono. Los bloques arrancan
+  // colapsados salvo el primero: se ve el mapa completo del área de un vistazo
+  // y se abre solo lo que interesa. El conteo de indicadores va en el título
+  // para que cerrado siga siendo informativo.
+  const visibles = bloques.filter((b) => b.filas.some((f) => cell(pais, f).main !== "—"));
+  const [abiertos, setAbiertos] = useState<Record<number, boolean>>({ 0: true });
+  const alternar = (i: number) => setAbiertos((prev) => ({ ...prev, [i]: !prev[i] }));
+
   return (
     <div>
-      {bloques
-        .filter((b) => b.filas.some((f) => cell(pais, f).main !== "—"))
+      {visibles
         .map((b, bi) => (
-          <div key={bi} style={{ marginTop: bi === 0 ? 10 : 14 }}>
-            <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)", marginBottom: 5, padding: "0 2px" }}>
-              {b.titulo}
-            </div>
+          <div key={bi} style={{ marginTop: bi === 0 ? 10 : 8 }}>
+            <button
+              onClick={() => alternar(bi)}
+              style={{
+                width: "100%", minHeight: 44, display: "flex", alignItems: "center",
+                justifyContent: "space-between", gap: 8, background: "transparent",
+                border: "none", padding: "0 2px", cursor: "pointer", textAlign: "left",
+                fontFamily: "inherit",
+              }}
+            >
+              <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)" }}>{b.titulo}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                <span style={{ fontSize: 10, color: "var(--text-3)" }}>{b.filas.length}</span>
+                <span style={{ fontSize: 11, color: "var(--text-3)" }}>{abiertos[bi] ? "▾" : "▸"}</span>
+              </span>
+            </button>
+            {abiertos[bi] && (
             <div style={{ border: "0.5px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
               {b.filas.map((f) => {
                 const c = cell(pais, f);
@@ -1586,6 +1609,7 @@ function MovilArea({ pais, bloques, cell }: {
                 );
               })}
             </div>
+            )}
           </div>
         ))}
     </div>
@@ -1609,7 +1633,7 @@ type PnLRow = { kind: "sub" | "item"; label: string; id?: string; get: (pais: st
 
 function PnLTable({ paises, rows }: { paises: readonly string[]; rows: PnLRow[] }) {
   return (
-    <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden", width: "100%", maxWidth: 1440, minWidth: 270 + paises.length * 175 }}>
+    <div style={{ border: "0.5px solid var(--border)", borderRadius: 8, overflow: "hidden", width: "100%", maxWidth: 1250, minWidth: 270 + paises.length * 175 }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed" }}>
         <thead>
           <tr style={{ background: "var(--bg-2)" }}>
@@ -1718,9 +1742,22 @@ function KpiGroupTable({ title, cols, paises }: { title: string; cols: KpiColDef
 
 // ─── sub-componentes ──────────────────────────────────────────────────────────
 
-function AreaHeader({ title, sub, loading, badge }: {
-  title: string; sub: string; loading?: boolean; badge?: React.ReactNode;
+function AreaHeader({ title, sub, loading, badge, movil }: {
+  title: string; sub: string; loading?: boolean; badge?: React.ReactNode; movil?: boolean;
 }) {
+  // En móvil este encabezado era redundante: el área y el mes ya están en la barra
+  // superior, y el subtítulo decía "comparativo por país" cuando se ve un país.
+  // Se conserva solo el aviso de carga, que sí aporta.
+  if (movil) {
+    return loading ? (
+      <div style={{ marginBottom: 8 }}>
+        <span style={{
+          background: "var(--red-bg)", border: "0.5px solid var(--red-border)",
+          color: "var(--red)", fontSize: 10, padding: "2px 8px", borderRadius: 10,
+        }}>actualizando…</span>
+      </div>
+    ) : null;
+  }
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
       <span style={{ fontSize: 16, fontWeight: 500 }}>{title}</span>
