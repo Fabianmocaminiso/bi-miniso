@@ -563,6 +563,8 @@ export default function Cabina() {
     if (mode === "abs")   return fmtNum(Math.abs(v));
     if (mode === "dec")   return v.toFixed(1);
     if (mode === "dec2")  return v.toFixed(1);
+    // "unidades": conteos que deben leerse completos (6,000 SKU, no 6K)
+    if (mode === "unidades") return Math.round(v).toLocaleString("es-MX");
     return fmtNum(v);
   };
   const rhVal  = (p: string, f: string, m?: string) => mv("rh", p, f, m);
@@ -593,6 +595,8 @@ export default function Cabina() {
     if (modo === "abs")   return fmtNum(Math.abs(v));
     if (modo === "dec")   return v.toFixed(1);
     if (modo === "dec2")  return v.toFixed(1);
+    // "unidades": conteos que deben leerse completos (6,000 SKU, no 6K)
+    if (modo === "unidades") return Math.round(v).toLocaleString("es-MX");
     return fmtNum(v);
   };
   const colorVar = (d: number, dir?: string): string => {
@@ -1204,10 +1208,10 @@ const BLK_COMERCIAL: AreaBloque[] = [
     { id: "KPI-COM-004", label: "Venta en rebajas", campo: "venta_rebajas_pct_descuentos", modo: "pct", unidad: "%", dir: "down" },
   ]},
   { titulo: "3. Surtido y stock por tienda", filas: [
-    { id: "KPI-COM-008", label: "Promedio SKUs en tiendas", campo: "promedio_skus_en_tiendas", unidad: "Conteo" },
-    { id: "KPI-COM-009", label: "Promedio SKUs en almacén", campo: "promedio_skus_en_almacen", unidad: "Conteo" },
-    { id: "KPI-COM-010", label: "SKUs con menos de 3 pzas en CEDIS", campo: "sku_menos_de_3_piezas_en_cedis", unidad: "Conteo" },
-    { id: "KPI-COM-011", label: "SKUs con menos de 3 pzas en tiendas", campo: "skus_menos_de_3_piezas_en_tiendas", unidad: "Conteo" },
+    { id: "KPI-COM-008", label: "Promedio SKUs en tiendas", campo: "promedio_skus_en_tiendas", unidad: "Conteo", modo: "unidades" },
+    { id: "KPI-COM-009", label: "Promedio SKUs en almacén", campo: "promedio_skus_en_almacen", unidad: "Conteo", modo: "unidades" },
+    { id: "KPI-COM-010", label: "SKUs con menos de 3 pzas en CEDIS", campo: "sku_menos_de_3_piezas_en_cedis", unidad: "Conteo", modo: "unidades" },
+    { id: "KPI-COM-011", label: "SKUs con menos de 3 pzas en tiendas", campo: "skus_menos_de_3_piezas_en_tiendas", unidad: "Conteo", modo: "unidades" },
     { id: "KPI-COM-012", label: "Stock promedio por tienda", campo: "stock_promedio_x_tienda_piezas", unidad: "Piezas" },
     { id: "KPI-COM-013", label: "Stock promedio por tienda", campo: "stock_promedio_x_tienda_dinero", modo: "money" },
   ]},
